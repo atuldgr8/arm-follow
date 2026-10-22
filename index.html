@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Arm Follow</title>
   <script type="importmap">
@@ -58,6 +59,7 @@
     #centre .big { font-size: 15px; font-weight: 600; } #centre .small { color: var(--text2); font-size: 13px; margin-top: 4px; white-space: pre; }
     /* ---- Atul's panel (iOS-style grouped sections) ---- */
     #panel { width: 316px; min-width: 316px; height: 100vh; overflow-y: auto; background: var(--bg); padding: 14px 14px 30px; box-sizing: border-box; font-size: 13px; }
+    #pver { font-size: 11px; font-weight: 500; color: var(--text3); letter-spacing: 0; margin-left: 4px; }
     #ptitle { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; margin: 2px 2px 10px; }
     #quick { position: sticky; top: -14px; z-index: 3; background: var(--bg); padding: 6px 0 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
     #quick button { font: inherit; font-size: 12px; font-weight: 500; background: var(--card); color: var(--text); border: none; border-radius: 10px; padding: 7px 4px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; }
@@ -141,7 +143,7 @@
     </div>
 
     <div id="panel">
-      <div id="ptitle">Arm Follow</div>
+      <div id="ptitle">Arm Follow <span id="pver"></span></div>
       <div id="quick">
         <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera<kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats<kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View<kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo<kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate<kbd>C</kbd></button><button id="btn-setup" title="Back to the start: measure the floor again, or re-pick who's followed">Setup</button><button id="btn-restart">Restart<kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log<kbd>O</kbd></button>
       </div>
@@ -284,8 +286,10 @@
       .then(m => { window.FilesetResolver = m.FilesetResolver; window.PoseLandmarker = m.PoseLandmarker; window.HandLandmarker = m.HandLandmarker; window.mediaPipeLoaded = true; })
       .catch(e => { window.mediaPipeError = String(e && e.message || e); });
     // the rest is plain scripts (so it also runs by opening index.html)
+    // BUILD changes with every update, so the browser can't reuse old copies of the scripts
+    const BUILD = '1.5 · 22 Oct 20:00'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
-      await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f; s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
+      await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }
   </script>
 </body>
