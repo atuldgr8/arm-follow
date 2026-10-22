@@ -607,10 +607,17 @@ function buildSnap() {
   if (SET.ghost && FOLLOW.ref1 && live2()) ghost = [r3(AV.root.x - effGain() * FOLLOW.dvec.x), r3(AV.root.z - effGain() * FOLLOW.dvec.z)];
   return { ok: true, body: b, yaw: r3(AV.yaw), arms, strings: SET.strings,
     cube: { c: a3(CUBE.c), yaw: r3(CUBE.yaw), s: r3(CUBE.scale), held: CUBE.held, appear: r3(CUBE.appear) },
-    plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], ghost, chap: chapSnap(), hud: hudSnap() };
+    plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
 }
 function hudSnap() {
   return { drift: r3(FOLLOW.drift), tol: SET.tol, turn: Math.round(FOLLOW.turn), turnTol: SET.turnTol, state: FOLLOW.state,
     score: TASK.score, hold: r3(TASK.holdT / SET.holdTime), flash: r3(TASK.flash), p1: !!live(1), p2: !!live2(), anyP2: p2Arms().length > 0,
     held: CUBE.held, slip: r3(CUBE.slip), touching: CUBE.touching || 0, dwell: r3(CUBE.dwell) };
+}
+
+// the walk to the centre: the ring everyone walks onto (the middle of the room), and where P2 is
+function centreSnap() {
+  if (typeof RUN === 'undefined' || RUN.phase !== 'centre') return null;
+  let p2 = p2InRoom(), c = RUN.centre || {};
+  return { ring: [VR.cx, VR.cz], p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: c.d1 !== null && c.d1 < 0.15, ok2: c.d2 !== null && c.d2 < 0.15 };
 }

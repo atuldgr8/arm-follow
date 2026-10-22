@@ -11,7 +11,7 @@ const METER_MAX = 1.4;   // the drift meter shows up to 1.4 × the tolerance
 let lastScore = 0;
 function hudStep(S) {
   let h = S && S.hud;
-  $('hud').style.display = h && h.anyP2 && h.p1 ? 'block' : 'none';
+  $('hud').style.display = h && h.anyP2 && h.p1 && RUN.phase === 'play' ? 'block' : 'none';
   if (!h) { $('waiting').textContent = 'Starting…'; return; }
   let wait = !h.p1 ? 'Waiting for P1' : (h.anyP2 && !h.p2 ? 'Waiting for P2 · the arm has nobody in it' : '');
   $('waiting').textContent = wait;
@@ -27,7 +27,7 @@ function hudStep(S) {
   if (h.score !== lastScore) { lastScore = h.score; $('score').style.transform = 'scale(1.35)'; setTimeout(() => { $('score').style.transform = ''; }, 260); }
   $('hold').style.opacity = h.hold > 0.01 ? 1 : 0;
   let et = edgeText(); $('edge').style.display = et ? 'block' : 'none'; $('edge').textContent = et;
-  $('calib').style.display = CAL.active ? 'flex' : 'none';
+  $('calib').style.display = CAL.active && RUN.phase !== 'setup' ? 'flex' : 'none';   // in setup the start card shows it
   if (CAL.active) $('calib-text').innerHTML = 'Walk to your front, back, left and right edges<br>' + (CAL.live ? rectW(CAL.live).toFixed(1) + ' × ' + rectD(CAL.live).toFixed(1) + ' m so far' : 'waiting for someone in the camera') + '<br>press C (or the button) when done';
   $('hold').querySelector('.fill').style.width = (clamp(h.hold, 0, 1) * 100) + '%';
 }
@@ -80,6 +80,18 @@ function pipStep() {
       x.strokeStyle = col; x.fillStyle = col; x.lineWidth = 2.5; x.lineCap = 'round';
       for (let [a, b] of PIP_BONES) { if (lm[a] && lm[b]) { x.beginPath(); x.moveTo(lm[a].x * w, lm[a].y * h); x.lineTo(lm[b].x * w, lm[b].y * h); x.stroke(); } }
       if (slot) { x.save(); x.translate(lm[0].x * w, lm[0].y * h - 18); if (SET.mirror) x.scale(-1, 1); x.font = 'bold 12px monospace'; x.textAlign = 'center'; x.fillText('P' + slot, 0, 0); x.restore(); }
+    }
+    // the floor this laptop uses (or the one being measured), outlined on the picture; the centre during the walk to it
+    let my = isGuest() ? 2 : 1, fr = CAL.active ? Object.assign({}, CAL.live || {}, { fa: (CAL.rect || {}).fa, fb: (CAL.rect || {}).fb }) : usable(my);
+    if (fr && fr.x0 !== undefined) {
+      let base = CAL.rect || {}, src = { fa: fr.fa !== undefined ? fr.fa : base.fa, fb: fr.fb !== undefined ? fr.fb : base.fb };
+      let pts = [[fr.x0, fr.z0], [fr.x1, fr.z0], [fr.x1, fr.z1], [fr.x0, fr.z1]].map(([px, pz]) => floorToPicture(src, px, pz));
+      if (pts.every(q => q)) {
+        x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.beginPath();
+        pts.forEach((q, i) => i ? x.lineTo(q.x * w, q.y * h) : x.moveTo(q.x * w, q.y * h)); x.closePath(); x.stroke(); x.setLineDash([]);
+        let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
+        if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
+      }
     }
     x.strokeStyle = 'rgba(120,230,255,0.95)'; x.lineWidth = 1.5;
     for (let hd of MP.handsFound || []) { for (let [a, b] of HAND_BONES) { x.beginPath(); x.moveTo(hd.lm[a].x * w, hd.lm[a].y * h); x.lineTo(hd.lm[b].x * w, hd.lm[b].y * h); x.stroke(); } }
@@ -135,7 +147,7 @@ function restartAll() {
 }
 function restartTracking() { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); else { people[1] = null; people[2] = null; DEMO.reset = true; } }
 function setupPanel() {
-  $('src').onchange = e => { unlockPeople(); RUN.started = false; setSource(e.target.value, $('cam').value); updatePanel(); };
+  $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
   cameraList().then(l => { $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join(''); });
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
   let sel = (id, key, after, num) => { $(id).value = String(SET[key]); $(id).onchange = e => { SET[key] = num ? parseFloat(e.target.value) : e.target.value; if (after) after(); updatePanel(); }; };
@@ -168,8 +180,10 @@ function setupPanel() {
   sl('turnmax', 'turnMax', v => v >= 180 ? 'no limit' : '±' + v + '°');
   sel('camlock', 'camLock'); sel('examine', 'examine');
   sl('examd', 'examineDist', v => v.toFixed(1) + ' m'); tog('btn-xray', 'xray');
-  $('btn-cal').onclick = calibrate; $('btn-cal2').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
-  $('btn-start').onclick = startRun; $('btn-setup').onclick = backToSetup;
+  $('btn-cal').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
+  $('f-cal').onclick = calibrate; $('f-skip').onclick = skipFloor; $('f-again').onclick = calibrate;
+  $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
+  $('f-start').onclick = startRun; $('btn-setup').onclick = backToSetup;
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
@@ -188,7 +202,8 @@ function setupPanel() {
 }
 function updatePanel() {
   if (!$('src')) return;
-  let set = (id, label, on) => { let b = $(id); if (!b) return; b.textContent = label + (on ? 'On' : 'Off'); b.classList.toggle('on', !!on); };
+  // switches show just their name; the switch itself shows on / off
+  let set = (id, label, on) => { let b = $(id); if (!b) return; b.textContent = b.classList.contains('sw') ? label.replace(/[:\s]+$/, '').replace(/ \([A-Z]\)$/, '') : label + (on ? 'On' : 'Off'); b.classList.toggle('on', !!on); };
   let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
@@ -202,9 +217,8 @@ function updatePanel() {
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
-  $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor'; $('btn-cal2').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
+  $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
   $('spawnlr').value = SET.spawnLR ? '1' : '0';
-  $('ready-floor').textContent = CAL.rect ? 'Measured: ' + fmt(CAL.rect) + (CAL.active ? '' : ' ✓') : CAL.active ? '' : 'Not measured.';
   for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
   for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain']]) { $(id).value = SET[key]; }
@@ -215,42 +229,104 @@ function updatePanel() {
   cond('g-gain', !(floorOn && SET.calUse !== 'cubes')); cond('g-area', !(floorOn && SET.calUse !== 'gain')); cond('g-edged', SET.edgeWarn);
   cond('own-row', SET.own === 'custom'); cond('g-exam', SET.examine !== 'off');
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
-  $('net-status').textContent = NET.status;
+  $('net-status').textContent = netNiceStatus(); $('net-status').classList.toggle('ok', NET.connected);
+  $('btn-host').classList.toggle('on', NET.role === 'host'); $('btn-host').textContent = NET.role === 'host' ? 'Hosting · code ' + NET.code : 'Host on this laptop (P1)';
+  $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
-  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror', 'btn-start'];
+  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
 
-// ---------------- the start card ----------------
-// Webcam: the card shows until START. START locks onto the people being followed (the
-// biggest in the picture) and starts fresh. Setup brings the card back.
-const RUN = { started: false };
+// ---------------- the start flow ----------------
+// setup:  each laptop measures its floor (or keeps its saved one) → P1 picks how two
+//         different rooms fit → both step into their cameras → P1 presses START
+// centre: START locks onto the people being followed; both walk onto the ring (the
+//         middle of the floor they use); once both are there it begins by itself
+// play:   the experience. Setup (quick bar) goes back to the start.
+const RUN = { phase: SET.source === 'demo' ? 'play' : 'setup', centre: null, centreT: 0 };
+const isHuman = p => p && (p.key === null || (p.key === 'net' && p.human));
+function needsCentre() { return SET.spaces === 2 && !!usable(1); }
 function startRun() {
   if (isGuest()) return;
   if (CAL.active) calibrate();
-  lockPeople(); RUN.started = true; restartWorld();
-  if (NET.connected) netSend({ type: 'start' });
-  toast('Started'); updatePanel();
-}
-function backToSetup() {
-  if (isGuest()) { toast('P1’s laptop decides this'); return; }
-  unlockPeople(); RUN.started = false;
-  if (NET.connected) netSend({ type: 'setup' });
+  lockPeople();
+  if (needsCentre()) { RUN.phase = 'centre'; RUN.centreT = 0; RUN.centreSince = 0; logEvent('flow', { to: 'centre' }); }
+  else beginPlay();
   updatePanel();
 }
-function readyStep() {
-  let show = SET.source === 'mediapipe' && !RUN.started;
-  $('ready').style.display = show ? 'block' : 'none'; $('waiting').style.visibility = show ? 'hidden' : 'visible'; if (!show) return;
-  let guest = isGuest();
-  $('btn-start').style.display = guest ? 'none' : 'block'; $('ready-guest').style.display = guest ? 'block' : 'none';
-  let mine = SET.comp !== 'off' ? [SET.comp === 'P2' ? 1 : 2] : SET.spaces === 2 ? [NET.connected ? NET.myId : 1] : [1, 2];
-  let seen = mine.filter(k => live(k)), n = (MP.found || []).length;
-  $('ready-who').innerHTML = (mine.length === 2 ? 'The two biggest people in the picture become P1 (screen left) and P2.' : 'The biggest person in the picture is followed' + (SET.spaces === 2 ? ' as ' + (mine[0] === 1 ? 'P1' : 'P2') : '') + '.') +
-    ' Anyone else is ignored after START. Check the camera view (J) shows the right person labelled.<br><span style="color:' + (seen.length === mine.length ? '#7fd39a' : '#d9a46a') + '">' +
-    (seen.length === mine.length ? 'Ready: ' + seen.map(k => 'P' + k).join(' + ') + ' found' : 'Looking for ' + (mine.length === 2 ? 'two people' : 'you')) + ' · ' + n + ' in the picture</span>';
-  $('btn-start').disabled = seen.length < mine.length;
+function beginPlay() { RUN.phase = 'play'; RUN.centre = null; restartWorld(); logEvent('flow', { to: 'play' }); toast('Go!'); updatePanel(); }
+function backToSetup() {
+  if (isGuest()) { toast('P1’s laptop decides this'); return; }
+  unlockPeople(); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; RUN.centre = null; logEvent('flow', { to: 'setup' }); updatePanel();
+}
+// host: during the walk to the centre, who's there yet
+function centreStep(dt) {
+  if (RUN.phase !== 'centre' || isGuest()) return;
+  let st = {};
+  for (let k of [1, 2]) {
+    let p = k === 2 ? live2() : live(1), d = centreDist(k);
+    st['d' + k] = !p ? null : (d === null || !isHuman(p)) ? 0 : r3(d);
+  }
+  RUN.centre = st;
+  let there = k => st['d' + k] !== null && st['d' + k] < 0.15;
+  // both on the ring for 0.8 s (real time) and it begins
+  let now = performance.now();
+  if (!(there(1) && there(2))) RUN.centreSince = 0; else if (!RUN.centreSince) RUN.centreSince = now;
+  RUN.centreT = RUN.centreSince ? (now - RUN.centreSince) / 1000 : 0;
+  if (RUN.centreT > 0.8) beginPlay();
+}
+function flowStep() {
+  let cam = SET.source === 'mediapipe';
+  let showCard = cam && RUN.phase === 'setup', showCentre = RUN.phase === 'centre';
+  $('flow').style.display = showCard ? 'block' : 'none';
+  $('centre').style.display = showCentre ? 'block' : 'none';
+  $('waiting').style.visibility = showCard ? 'hidden' : 'visible';
+  if (showCentre) {
+    let c = RUN.centre || {}, f = d => d === null || d === undefined ? 'not found' : d < 0.15 ? '✓ there' : d.toFixed(2) + ' m away';
+    $('centre-who').textContent = 'P1 ' + f(c.d1) + '   ·   P2 ' + f(c.d2);
+  }
+  if (!showCard) return;
+  let guest = isGuest(), linked = SET.spaces === 2 && NET.connected, fmt = r => rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m';
+  // 1 · the floor
+  let done1 = calStepDone(), t1;
+  if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use, then press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see you in the camera…') + '</b>';
+  else if (CAL.rect) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor: <b>' + fmt(CAL.rect) + '</b>';
+  else if (CAL.skipped) t1 = '✓ Skipped: the walk-gain sliders are used instead.';
+  else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then press Done.';
+  $('fs1-text').innerHTML = t1;
+  $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
+  $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';
+  $('f-skip').style.display = !CAL.active && !done1 ? '' : 'none';
+  $('f-again').style.display = !CAL.active && done1 ? '' : 'none';
+  $('fs1').classList.toggle('done', done1);
+  let other = '';
+  if (linked && !guest) other = 'P2’s laptop: ' + (NET.otherCal ? 'measuring…' : CAL.other ? '✓ ' + fmt(CAL.other) : NET.otherDone ? '✓ skipped' : 'not done yet');
+  $('fs1-other').textContent = other;
+  // 2 · two rooms of different sizes (2 spaces, both measured)
+  let two = linked && CAL.rect && CAL.other;
+  $('fs2').style.display = two ? '' : 'none';
+  if (two) {
+    let mine = guest ? 'P2' : 'P1', theirs = guest ? 'P1' : 'P2';
+    $('fs2-text').innerHTML = mine + ' (you): <b>' + fmt(CAL.rect) + '</b> · ' + theirs + ': <b>' + fmt(CAL.other) + '</b>' + (guest ? '<br>P1 chooses how they fit.' : '');
+    $('f-mapped').classList.toggle('on', SET.roomFit === 'mapped'); $('f-smaller').classList.toggle('on', SET.roomFit === 'smaller');
+    $('f-mapped').disabled = guest; $('f-smaller').disabled = guest;
+    $('fs2-note').textContent = SET.roomFit === 'mapped' ? 'Each room maps onto the other: in the smaller room each step counts for more.' : 'Both use a patch the size of the smaller room; the person in the bigger room gets walls (and an outline in their camera view).';
+  }
+  // 3 · step into the camera
+  let mineSlots = SET.comp !== 'off' ? [SET.comp === 'P2' ? 1 : 2] : SET.spaces === 2 ? [NET.connected ? NET.myId : 1] : [1, 2];
+  let seen = mineSlots.filter(k => live(k)), n = (MP.found || []).length;
+  let p2ok = SET.spaces === 1 || SET.comp !== 'off' || SET.solo || !!live2();
+  $('fs3-text').innerHTML = (mineSlots.length === 2 ? 'The two biggest people in the picture become P1 (screen left) and P2.' : 'The biggest person in your camera is followed as ' + (mineSlots[0] === 1 ? 'P1' : 'P2') + '; anyone else is ignored after START.') +
+    '<br><span class="' + (seen.length === mineSlots.length ? 'ok' : 'wait') + '">' + (seen.length === mineSlots.length ? '✓ Found you' : 'Looking for you…') + ' · ' + n + ' in the picture</span>' +
+    (!guest && SET.spaces === 2 && SET.comp === 'off' && !SET.solo ? ' · <span class="' + (p2ok ? 'ok' : 'wait') + '">' + (p2ok ? '✓ P2 found' : linked ? 'P2 not found yet' : 'P2 not linked yet') + '</span>' : '');
+  $('fs3').classList.toggle('done', seen.length === mineSlots.length && p2ok);
+  // START
+  let ready = done1 && seen.length === mineSlots.length && p2ok && (!linked || NET.otherDone || !!CAL.other);
+  $('f-start').style.display = guest ? 'none' : ''; $('f-wait').style.display = guest ? '' : 'none';
+  $('f-start').disabled = !ready;
+  $('f-start-note').textContent = guest ? '' : ready ? (needsCentre() ? 'After START, both walk onto the ring in the room; it begins once you’re both there.' : '') : 'START unlocks once every step above is done.';
 }
 
 function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
@@ -287,7 +363,7 @@ function frame(now) {
   if (isGuest()) S = guestSnap(dt);
   else { simStep(dt, now); S = SNAP; }
   sceneRender(S, dt);
-  hudStep(S); statsStep(S); pipStep(); readyStep(); logTick(now, S);
+  centreStep(dt); hudStep(S); statsStep(S); pipStep(); flowStep(); logTick(now, S);
 }
 sceneInit($('stage'));
 setupPanel();

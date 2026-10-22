@@ -93,6 +93,11 @@ function sceneInit(container) {
   let og = new THREE.BufferGeometry().setFromPoints([new V3(), new V3(), new V3(), new V3(), new V3()]);
   SC.parts.outline = new THREE.Line(og, new THREE.LineBasicMaterial({ color: 0x5aa9d6, transparent: true, opacity: 0.5 }));
   SC.parts.outline.visible = false; scene.add(SC.parts.outline);
+  // the walk to the centre: a ring on the floor, and a marker for where P2 is
+  SC.parts.ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 48), new THREE.MeshBasicMaterial({ color: 0x30d158, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  SC.parts.ring.rotation.x = -Math.PI / 2; SC.parts.ring.visible = false; scene.add(SC.parts.ring);
+  SC.parts.p2dot = new THREE.Mesh(new THREE.CircleGeometry(0.16, 32), new THREE.MeshBasicMaterial({ color: COL.p2, transparent: true, opacity: 0.9 }));
+  SC.parts.p2dot.rotation.x = -Math.PI / 2; SC.parts.p2dot.visible = false; scene.add(SC.parts.p2dot);
   window.addEventListener('resize', sceneResize);
   sceneResize();
 }
@@ -178,6 +183,14 @@ function sceneRender(S, dt) {
   if (S.ghost) P.ghost.position.set(S.ghost[0], 0.006, S.ghost[1]);
 
   drawFloorEdges(S.chap);
+  let ce = S.centre, P2 = SC.parts;
+  P2.ring.visible = !!ce; P2.p2dot.visible = !!(ce && ce.p2);
+  if (ce) {
+    let pulse = 1 + 0.06 * Math.sin(performance.now() / 250);
+    P2.ring.position.set(ce.ring[0], 0.01, ce.ring[1]); P2.ring.scale.setScalar(pulse);
+    P2.ring.material.color.setHex(ce.ok1 && ce.ok2 ? 0x30d158 : 0x7fe89a);
+    if (ce.p2) P2.p2dot.position.set(ce.p2[0], 0.015, ce.p2[1]);
+  }
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid
   let fade = SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, bm = SC.parts.bodyMat;
   if (Math.abs(bm.opacity - fade) > 0.005) { bm.opacity = fade; let t = fade < 0.99; if (bm.transparent !== t) { bm.transparent = t; bm.depthWrite = !t; bm.needsUpdate = true; } }
@@ -246,7 +259,7 @@ function cameraStep(S, dt, b) {
   // P2's laptop shows exactly what P1's camera shows
   if (isGuest() && S.cam) {
     SC.controls.enabled = false;
-    let k = Math.min(1, dt * 12);
+    let k = Math.min(1, dt * 25);
     SC.camPos.lerp(fromArr(S.cam.p), k); SC.camLook.lerp(fromArr(S.cam.l), k);
     if (cam.fov !== S.cam.fov) { cam.fov = S.cam.fov; cam.updateProjectionMatrix(); }
     cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); SC.exam = S.cam.exam || 0; return;

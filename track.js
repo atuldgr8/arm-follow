@@ -14,7 +14,7 @@
 
 const SET = {
   // ---- tracking ----
-  source: 'demo',        // 'demo' (two made-up people) | 'mediapipe' (webcam)
+  source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   mirror: true, smooth: 0.5, solo: false,
   mpSplit: true,         // 1 space: look for one person in each half of the picture
   mpModel: 'lite',       // 'lite' | 'full'
@@ -118,7 +118,7 @@ function setPerson(id, key, raw, now, smoothIt) {
   let p = people[id];
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
-  if (raw.img) { p.img = raw.img; p.size = raw.size; }
+  if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; }
   let t = now / 1000, fz = feel(), j = {};
   for (let n of JN) {
     let q = raw.j[n]; if (!q) continue;
@@ -257,7 +257,7 @@ function mpTick(now) {
     let j = { pelvis: pel };
     for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
     j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
-    list.push({ key: null, j, chir, lm, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y } });   // size: torso height as a share of the picture
+    list.push({ key: null, j, chir, lm, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y }, ankY: Math.max(lm[27].y, lm[28].y), dist: d });   // size: torso height as a share of the picture
   }
   matchHands(list, sx, chir);
   ingest(list, now);
@@ -329,7 +329,15 @@ function pickBiggest(list, slots) {
 function pickLocked(list, slots, now) {
   let out = {}, used = new Set();
   for (let k of slots) {
-    let L = LOCK.slots[k]; if (!L) continue;
+    let L = LOCK.slots[k];
+    // nobody was there at START: take the biggest unclaimed person now, and lock onto them
+    if (!L) {
+      let free = list.map((c, i) => i).filter(i => !used.has(i)).sort((a, b) => list[b].size - list[a].size);
+      if (!free.length) continue;
+      let c = list[free[0]]; used.add(free[0]); out[k] = c;
+      LOCK.slots[k] = { x: c.img.x, y: c.img.y, size: c.size, t: now };
+      continue;
+    }
     let reach = now - L.t > 1500 ? 0.6 : 0.25, best = -1;   // gone a while: look wider for them
     list.forEach((c, i) => {
       if (used.has(i)) return;

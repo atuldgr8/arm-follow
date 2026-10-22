@@ -10,7 +10,7 @@
 // ============================================================
 
 const VR = { cx: 0, cz: -1.0, w: 7, d: 6 };   // the part of the virtual room the body walks in
-const CAL = { active: false, live: null, rect: null, other: null };
+const CAL = { active: false, live: null, rect: null, other: null, samples: [], skipped: false };
 try { let s = localStorage.getItem('armfollow.floor'); if (s) CAL.rect = JSON.parse(s); } catch (e) {}
 const rectW = r => r.x1 - r.x0, rectD = r => r.z1 - r.z0;
 
@@ -21,25 +21,28 @@ function calSlots() {
   if (SET.spaces === 2 && NET.connected) return [NET.myId];
   return [1, 2];
 }
-// press once to start measuring, walk to every edge, press again to finish
+// press once to start measuring, walk to every edge, press again to finish.
+// Each laptop measures its own floor (P2 measures P2's).
 function calibrate() {
-  if (NET.role === 'host' && NET.connected) netSend({ type: 'cal', on: !CAL.active });
-  if (!CAL.active) { CAL.active = true; CAL.live = null; logEvent('calibrate', { what: 'start' }); updatePanel(); return; }
+  if (!CAL.active) { CAL.active = true; CAL.live = null; CAL.samples = []; CAL.skipped = false; logEvent('calibrate', { what: 'start' }); updatePanel(); return; }
   CAL.active = false;
   let r = CAL.live;
-  if (!r || rectW(r) < 0.5 || rectD(r) < 0.5) { toast('Too small (under 50 cm): floor not changed'); updatePanel(); return; }
+  if (!r || rectW(r) < 0.5 || rectD(r) < 0.5) { toast('Too small (under 50 cm in one direction): floor not changed'); updatePanel(); return; }
   CAL.rect = { x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1 };
+  // where the floor is in the camera picture (feet height in the picture against distance), for the camera view's floor outline
+  let fit = fitFloor(CAL.samples); if (fit) { CAL.rect.fa = fit.a; CAL.rect.fb = fit.b; }
   try { localStorage.setItem('armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
   logEvent('calibrate', { w: +rectW(r).toFixed(2), d: +rectD(r).toFixed(2) });
   toast('Floor: ' + rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m');
-  if (!isGuest()) restartWorld();
+  if (!isGuest() && RUN.phase === 'play') restartWorld();
   updatePanel();
 }
+// skip measuring: keep the saved floor if there is one, else use the sliders
+function skipFloor() { CAL.active = false; CAL.skipped = true; updatePanel(); }
 function forgetFloor() {
-  if (NET.role === 'host' && NET.connected) netSend({ type: 'calforget' });
-  CAL.rect = null; CAL.active = false;
+  CAL.rect = null; CAL.active = false; CAL.skipped = false;
   try { localStorage.removeItem('armfollow.floor'); } catch (e) {}
-  if (!isGuest()) restartWorld();
+  if (!isGuest() && RUN.phase === 'play') restartWorld();
   updatePanel();
 }
 function calTick() {
@@ -48,7 +51,34 @@ function calTick() {
     let p = live(k); if (!p) continue;
     let x = p.j.pelvis.x, z = p.j.pelvis.z, r = CAL.live;
     CAL.live = r ? { x0: Math.min(r.x0, x), x1: Math.max(r.x1, x), z0: Math.min(r.z0, z), z1: Math.max(r.z1, z) } : { x0: x, x1: x, z0: z, z1: z };
+    if (p.ankY && p.dist && CAL.samples.length < 3000) CAL.samples.push([1 / p.dist, p.ankY]);
   }
+}
+// a straight-line fit: feet height in the picture = a + b / distance
+function fitFloor(S) {
+  if (!S || S.length < 30) return null;
+  let n = S.length, sx = 0, sy = 0, sxx = 0, sxy = 0, lo = 9, hi = -9;
+  for (let [x, y] of S) { sx += x; sy += y; sxx += x * x; sxy += x * y; lo = Math.min(lo, x); hi = Math.max(hi, x); }
+  if (hi - lo < 0.04) return null;   // walked too little toward or away from the camera to tell
+  let b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
+  return b > 0 ? { a, b } : null;
+}
+// a floor point (this laptop's camera metres) → where it is in the camera picture (0..1)
+function floorToPicture(r, x, z) {
+  if (!r || r.fa === undefined || z < 0.3) return null;
+  let tanH = Math.tan(SET.fov * Math.PI / 360), lat = x * (SET.mirror ? -1 : 1);
+  return { x: 0.5 + lat / (2 * z * tanH), y: r.fa + r.fb / z };
+}
+function calStepDone() { return !CAL.active && (!!CAL.rect || CAL.skipped); }
+
+// the walk to the centre before it begins: each person's centre is the middle of the floor they use
+function centreOf(slot) { let u = usable(slot); return u ? { x: (u.x0 + u.x1) / 2, z: (u.z0 + u.z1) / 2 } : null; }
+function centreDist(slot) { let p = live(slot), c = centreOf(slot); return p && c ? Math.hypot(p.j.pelvis.x - c.x, p.j.pelvis.z - c.z) : null; }
+// where P2 stands, shown in the room (both centres land on the same spot in the room)
+function p2InRoom() {
+  let p = live2(), c = centreOf(2); if (!p || !c) return null;
+  let g = effGain(), k = p2Scale();
+  return { x: VR.cx + g * k.x * (p.j.pelvis.x - c.x), z: VR.cz + g * k.z * (p.j.pelvis.z - c.z) };
 }
 
 // each person's measured floor (P2's comes over the link in 2 spaces)

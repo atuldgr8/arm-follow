@@ -20,18 +20,23 @@ Online (for two laptops): https://atuldgr8.github.io/arm-follow/
 
 Locally: serve the folder (VS Code Live Server) and open `index.html` in Chrome. Serving is needed for the webcam and the 2-spaces link. Opening the file directly works for the demo.
 
-It starts in **Demo people**: two made-up people who play the whole loop by themselves. P1 walks to the cube, P2 gets distracted on every other trip (the arm falls), hurries to catch up (it comes back), then they lift the cube together. Good for seeing every part with nobody in the room.
+**Demo people** (Tracking → Source): two made-up people who play the whole loop by themselves. P1 walks to the cube, P2 gets distracted on every other trip (the arm falls), hurries to catch up (it comes back), then they lift the cube together. Good for seeing every part with nobody in the room.
 
 Switch **Source** to **Webcam (MediaPipe)** for real people. The **camera + skeletons** view (J) is on from the start: the live picture with the tracked points drawn on it, so you can see what the tracker sees.
 
-## Starting (webcam)
+## Starting
 
-With the webcam, a **Before you start** card shows at the bottom of the screen:
-1. **Measure your floor** (optional): press **Calibrate floor**, walk to the front, back, left and right edges of the space you can use, press it again. The room then fits your floor (see Floor below). It's remembered on that laptop.
-2. **Step into the camera.** The biggest person in the picture is followed (in 1 space the two biggest, P1 on screen left). The camera view (J) labels who's who.
-3. **START** locks onto those people: anyone else walking through the picture is ignored from then on. If the followed person leaves for more than 1.5 s, it looks a bit wider for them.
+It opens on the **webcam**. (Demo people only when you choose them under Tracking → Source.) A **Getting ready** card walks both laptops through:
 
-**Setup** (in the quick bar) brings the card back, to measure again or re-pick who's followed. In 2 spaces P1's START and Setup work on both laptops. The demo people need no card.
+1. **Measure your floor**, on each laptop (P2 measures P2's): press **Calibrate**, walk to the front, back, left and right edges of the space you can use, press **Done**. A saved floor is reused automatically (**Measure again** to redo it); **Skip** uses the saved floor if there is one, else the walk-gain sliders.
+2. **Two rooms of different sizes** (2 spaces, once both have measured): P1 picks **Map onto each other** or **Use the smaller room**. With the smaller room, the person in the bigger room gets walls (and a floor outline in their camera view).
+3. **Step into the camera.** The biggest person in each camera is followed.
+4. **START** (P1, once every step is done) locks onto those people: anyone else walking through is ignored. If nobody was in a camera at START, the first person to appear is locked onto.
+5. **Walk onto the green ring.** Both walk to the middle of the floor they use (the ring in the room; P2 shows as an orange dot; the camera view marks the spot). Once both are there for a moment, it begins by itself.
+
+**Setup** in the quick bar goes back to the card.
+
+**Camera view:** the floor you use is outlined on the camera picture (dashed), once you've measured it walking toward and away from the camera.
 
 ## 2 spaces (main)
 
@@ -39,7 +44,9 @@ With the webcam, a **Before you start** card shows at the bottom of the screen:
 2. On P1's laptop press **Host**: it shows a 4-letter code.
 3. On P2's laptop type the code and press **Join**.
 
-P1's laptop decides everything: the world, every setting, the view and the camera (P2 sees exactly P1's camera), and P2's tracking too. P1's Calibrate also starts and stops P2's floor measuring. On P2's laptop the panel is greyed out except what its own camera needs (which camera, its field of view, mirroring) and **Disconnect**.
+P1's laptop decides everything: the world, every setting, the view and the camera (P2 sees exactly P1's camera), and P2's tracking too. On P2's laptop the panel is greyed out except measuring its own floor, what its own camera needs (which camera, its field of view, mirroring) and **Disconnect**.
+
+**Lag:** both laptops send about 33 updates a second, and P2's laptop draws P2's own possessed arm straight from P2's own tracking, so P2 sees their arm move instantly; everything else arrives from P1's laptop a moment later.
 
 To test on one computer, tick **Same computer test** and use two browser tabs.
 
@@ -118,7 +125,7 @@ Each laptop measures its own floor. Press **Calibrate floor** (on the start card
 
 ## The panel
 
-A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Setup (back to the start card), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Explanations are in the ⓘ tooltips. The panel remembers which sections you left open.
+Grouped like iOS Settings: each section has its own colour (Tracking blue, Spaces indigo, Floor teal, Who owns what orange, Follow rule green, Lifeless arm purple, Picking up yellow, View pink), with switches for on/off settings. A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Setup (back to the start card), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Explanations are in the ⓘ tooltips. The panel remembers which sections you left open.
 
 ## Keys
 
