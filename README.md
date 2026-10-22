@@ -7,6 +7,18 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.9 changes (tracking rebuilt on the gold standard)
+
+- **Why it went haywire:** MediaPipe tracks the body in the picture very well (that's what the dancer demos show), but it doesn't say where you stand in the room; its 3D points are always centred on your hips. Arm Follow was guessing your distance from how long your torso looked, so bending (a shorter-looking torso) read as a jump backwards, multiplied by the walk gain.
+- **Where you stand now comes from your feet.** Your feet are on the floor, so where they are in the picture says how far away you are (the same idea as single-camera distance estimation in research, e.g. Fei et al., ICCV 2021). Bending, leaning and reaching don't move your feet. This needs a measured floor (walk toward and away from the camera while calibrating); the stats line says "where you stand from: feet / torso / held". Without it: the torso's size, but held still while you bend.
+- **Smoothing ported from the main build (V13.1):** every point is filtered in the picture, once per camera frame, then the body glides between camera frames at the screen's rate. The feel slider means the same as in the main build (default 0.5).
+- **Arms come from the picture,** plus how far they point at the camera. A hand that leaves the picture (overhead, say) keeps its last direction for a moment instead of flailing.
+- **Holding the cube:** held while your palms face each other, as if holding a box, overhead too. Let go by opening your hands outward or pulling them well apart.
+- **P2's cue:** just P2's shadow on the floor (a soft one, like the body's own). Walk it under the body. A thread runs from the fallen arm to the body's shoulder (toggle).
+- **The lying arm** follows P2 more strongly and sooner, lifts off the floor a little, and its fingers follow P2's hand.
+- **The game is carry and drop:** pick the cube up and set it down on the other plinth (top marked in blue). An optional **warm-up** (Picking up) lifts the first cube above the waist first.
+- **First person near the cube** (View, on): the view cuts to first person as you get close to the cube, back out while you carry it, and in again near the plinth to set it down on. The body fades while the camera moves through it.
+
 ## v1.8 changes (after the first real test)
 
 - **The link:** much lighter and faster. Updates go as plain text over a channel that never waits for a lost message (old ones are useless anyway), settings travel only when they change, and P1's laptop no longer drops P2 after a short gap (1.5 s instead of 0.6 s). P2's laptop plays P1's world a moment behind (**P2's view runs behind by**, Spaces, 60 ms) and blends between updates, so it moves smoothly instead of in jumps. P2's own possessed arm is still drawn instantly. The stats line shows how many updates arrive per second and, on P1's laptop, how long ago P2's body last arrived.
@@ -17,7 +29,6 @@ Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 20
 - **Steps toward/away count** (Follow rule, 50%): leaning in to reach looks to a webcam like a step forward, which used to knock the arm off.
 - **Hand assist** (Picking up, 0.6): near the cube, hands are drawn onto its sides and turned to face it; once held they stay on the sides. Letting go still uses where your hands really are. The grip now starts on **Both hands on the sides (sticky)**.
 - **Prompts** under the meter: "both hands on the sides of the cube", "one hand on…", "HELD · lift it…", "P2: follow your thread back…".
-- **Task levels** (Picking up): Level 1 lift it above the waist; **Level 2 carry it to the other plinth** (top marked in blue, across the room left/right) and set it down.
 - **Keep cubes in from the edges** (Floor, 45 cm): cubes stand that far inside your measured floor, so reaching for them stays in the camera.
 - **The camera near the cube** follows a calmed copy of the body and is anchored on the cube, so the body's wobble isn't magnified.
 

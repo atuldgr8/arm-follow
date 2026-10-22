@@ -51,7 +51,8 @@ function calTick() {
     let p = live(k); if (!p) continue;
     let x = p.j.pelvis.x, z = p.j.pelvis.z, r = CAL.live;
     CAL.live = r ? { x0: Math.min(r.x0, x), x1: Math.max(r.x1, x), z0: Math.min(r.z0, z), z1: Math.max(r.z1, z) } : { x0: x, x1: x, z0: z, z1: z };
-    if (p.ankY && p.dist && CAL.samples.length < 3000) CAL.samples.push([1 / p.dist, p.ankY]);
+    let dd = p.distT || p.dist;
+    if (p.ankY && dd && CAL.samples.length < 3000) CAL.samples.push([1 / dd, p.ankY]);
   }
 }
 // a straight-line fit: feet height in the picture = a + b / distance

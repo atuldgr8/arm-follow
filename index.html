@@ -252,7 +252,8 @@
           <div class="f"><label>Drift tolerance<span class="val" id="val-tol"></span></label><input type="range" id="tol" class="world" min="0.1" max="1.5" step="0.05"></div>
           <div class="f"><label>Turning tolerance<span class="val" id="val-turn"></span></label><input type="range" id="turn" class="world" min="10" max="120" step="5"></div>
           <div class="f"><label>Steps toward/away count<span class="tip" title="How much walking toward or away from the camera counts in the drift. Webcams guess distance from how big you look, so leaning in to reach looks like a step forward and can knock the arm off. 1 = fully, 0 = only left-right counts.">ⓘ</span><span class="val" id="val-ddrift"></span></label><input type="range" id="ddrift" class="world" min="0" max="1" step="0.05"></div>
-          <div class="f"><label>Where P2 is (thread + ring)<span class="tip" title="A shadow ring where P2 is in the room, tied by a thread to the shoulder P2 drives. P2 walks the ring into the circle under the body and the arm comes back. Both laptops see it.">ⓘ</span></label><select id="ghost" class="world"><option value="auto">While the arm is off</option><option value="always">Always</option><option value="off">Off</option></select></div>
+          <div class="f"><label>P2’s shadow<span class="tip" title="P2’s shadow on the floor, where P2 is in the room. Walk it under the body and the arm comes back. Both laptops see it.">ⓘ</span></label><select id="ghost" class="world"><option value="auto">While the arm is off</option><option value="always">Always</option><option value="off">Off</option></select></div>
+          <button class="sw world" id="btn-thread" title="A thread from the fallen arm to the body’s shoulder, sagging along the floor"></button>
 
         </div>
       </details>
@@ -282,12 +283,12 @@
       <details data-key="pickup" open style="--tint:#FFD23F">
         <summary><span class="ico dark"><svg viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="11" rx="1.5"/><path d="M9 9V6.5a3 3 0 0 1 6 0V9"/></svg></span><span class="st">Picking up</span> <span class="tip" title="The big two-hand cube. Palms moving apart lets go in every grip; a lifeless arm can’t hold.">ⓘ</span></summary>
         <div class="card">
-          <div class="f"><label>Task<span class="tip" title="Level 1: lift the cube above the body’s waist and hold it there. Level 2: carry it across to the other plinth (its top is marked in blue) and set it down there.">ⓘ</span></label><select id="task" class="world"><option value="lift">Level 1 · lift it above the waist</option><option value="carry">Level 2 · carry it to the other plinth</option></select></div>
+          <button class="sw world" id="btn-warmup" title="Before the game, an optional warm-up: lift the first cube above the body’s waist and hold it there. Then the game: carry each cube to the other plinth (its top marked in blue) and set it down."></button>
           <div class="f"><label>Grip</label><select id="grip" class="world"><option value="touch">Both hands on the sides (sticky)</option><option value="squeeze">Squeeze to hold (slips if you ease off)</option><option value="palm">Palms facing = grip</option><option value="dwell">Dwell 0.5 s (fallback)</option></select></div>
           <div class="f"><label>Which hands can hold</label><select id="holders" class="world"><option value="any">Any hand</option><option value="possessed">Only possessed hands</option></select><div class="note warn" id="holders-note"></div></div>
           <div class="f"><label>Hand assist<span class="tip" title="Near the cube, hands are drawn onto its sides and turned to face it, more strongly the closer they are; once held they stay on the sides. Letting go still uses where your hands really are. 0 = off.">ⓘ</span><span class="val" id="val-assist"></span></label><input type="range" id="assist" class="world" min="0" max="1" step="0.05"></div>
           <div class="f"><label>Touching distance<span class="tip" title="How close a palm has to be to count as touching. Webcam depth is a guess, so this is generous.">ⓘ</span><span class="val" id="val-touch"></span></label><input type="range" id="touch" class="world" min="0.03" max="0.2" step="0.01"></div>
-          <div class="cond" id="g-holdt" data-why="Hold time · level 1 only">
+          <div class="cond" id="g-holdt" data-why="Hold time · warm-up only">
           <div class="f"><label>Hold above the waist for<span class="val" id="val-hold"></span></label><input type="range" id="hold-t" class="world" min="0.5" max="5" step="0.5"></div>
           </div>
 
@@ -302,6 +303,7 @@
           <div class="cond" id="g-exam" data-why="How close · when the camera moves in">
           <div class="f"><label>Starts moving in at<span class="val" id="val-examd"></span></label><input type="range" id="examd" min="0.6" max="3" step="0.1"></div>
           </div>
+ <button class="sw" id="btn-fpnear" title="Near the cube, the view cuts to first person (and back); again near the plinth to set it down on"></button>
           <button class="sw" id="btn-xray" title="Near the cube the body fades, so your arms and the cube show through it"></button>
           <div class="f"><label>Body may turn up to<span class="tip" title="Past this the body stops turning. 180° = no limit.">ⓘ</span><span class="val" id="val-turnmax"></span></label><input type="range" id="turnmax" class="world" min="10" max="180" step="5"></div>
 
@@ -331,7 +333,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.8 · 23 Oct 02:00'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.9 · 23 Oct 03:30'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

@@ -152,7 +152,7 @@ function guestSnap(dt) {
       Q.n = mix(P.n, B.arms[side].n); Q.f = mix(P.f, B.arms[side].f); Q.curl = P.curl + (B.arms[side].curl - P.curl) * k;
     }
     out.cube.c = mix(A.cube.c, B.cube.c); out.yaw = A.yaw + (B.yaw - A.yaw) * k;
-    if (A.ghost && B.ghost && A.ghost.p && B.ghost.p) { out.ghost.p = mix(A.ghost.p, B.ghost.p); out.ghost.root = mix(A.ghost.root, B.ghost.root); }
+    if (A.ghost && B.ghost && A.ghost.p && B.ghost.p) { out.ghost.p = mix(A.ghost.p, B.ghost.p); }
     if (A.cam && B.cam) { out.cam.p = mix(A.cam.p, B.cam.p); out.cam.l = mix(A.cam.l, B.cam.l); }
   }
   SC.shown = out;

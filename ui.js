@@ -33,7 +33,7 @@ function hudStep(S) {
   // what to do next, in a few words
   let pr = '';
   if (RUN.phase === 'play' && h.p1) {
-    if (h.state === 'apart') pr = 'P2: follow your thread back · walk your ring into the circle';
+    if (h.state === 'apart') pr = 'P2: walk your shadow under the body';
     else if (h.held && h.task === 'carry') pr = h.nearT < 1.0 ? 'HELD · set it down on the blue-marked plinth' : 'HELD · carry it to the blue-marked plinth →';
     else if (h.task === 'carry' && h.hold > 0) pr = 'placed ✓';
     else if (h.held && h.up) pr = 'HELD · keep it up';
@@ -57,6 +57,7 @@ function statsStep(S) {
     `arms ${armTxt}`,
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
+    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => 'P' + k + ' ' + MPF[k].src + (MPF[k].d ? ' ' + MPF[k].d.toFixed(2) + ' m' : '')).join(' · ') + (CAL.rect && CAL.rect.fa !== undefined ? '' : ' (measure the floor, walking toward and away, to use your feet)') : '',
     `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
@@ -190,7 +191,7 @@ function setupPanel() {
   tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
   sl('fov', 'fov', v => v + '°'); sl('feel', 'smooth', v => v.toFixed(2));
-  sel('reach', 'reach'); sel('ghost', 'ghost'); sel('task', 'task', () => { if (!isGuest()) { if (CUBE.held) dropCube('task changed'); spawnCube(false); } });
+  sel('reach', 'reach'); sel('ghost', 'ghost'); tog('btn-warmup', 'warmup', () => { if (!isGuest()) restartWorld(); }); tog('btn-thread', 'thread'); tog('btn-fpnear', 'fpNear');
   sl('ddrift', 'depthDrift', v => v === 0 ? 'not at all' : v === 1 ? 'fully' : Math.round(v * 100) + '%');
   sl('assist', 'assist', v => v === 0 ? 'off' : v.toFixed(2)); sl('ebuf', 'edgeBuffer', v => Math.round(v * 100) + ' cm'); sl('netsm', 'netSmooth', v => v + ' ms');
   sl('cdelay', 'compDelay', v => v.toFixed(2) + ' s'); sl('cspeed', 'compSpeed', v => v.toFixed(2) + ' m/s');
@@ -238,13 +239,14 @@ function updatePanel() {
   set('btn-mirror', 'Mirror: ', SET.mirror);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
+  set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
   $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
   $('spawnlr').value = SET.spawnLR ? '1' : '0';
-  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit'], ['reach', 'reach'], ['ghost', 'ghost'], ['task', 'task']]) { $(id).value = String(SET[key]); }
+  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit'], ['reach', 'reach'], ['ghost', 'ghost']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
   for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain'], ['ddrift', 'depthDrift'], ['assist', 'assist'], ['ebuf', 'edgeBuffer'], ['netsm', 'netSmooth']]) { $(id).value = SET[key]; }
   $('val-ddrift').textContent = SET.depthDrift === 0 ? 'not at all' : SET.depthDrift === 1 ? 'fully' : Math.round(SET.depthDrift * 100) + '%';
@@ -254,7 +256,7 @@ function updatePanel() {
   cond('g-mp', cam); cond('g-split', SET.spaces === 1); cond('g-comp', cam); cond('comp-row', SET.comp !== 'off');
   cond('net-row', SET.spaces === 2); cond('g-roomfit', SET.spaces === 2);
   cond('g-gain', !(floorOn && SET.calUse !== 'cubes')); cond('g-area', !(floorOn && SET.calUse !== 'gain')); cond('g-edged', SET.edgeWarn);
-  cond('own-row', SET.own === 'custom'); cond('g-holdt', SET.task === 'lift'); cond('g-exam', SET.examine !== 'off');
+  cond('own-row', SET.own === 'custom'); cond('g-holdt', SET.warmup); cond('g-exam', SET.examine !== 'off' || SET.fpNear);
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = netNiceStatus(); $('net-status').classList.toggle('ok', NET.connected);
   $('btn-host').classList.toggle('on', NET.role === 'host'); $('btn-host').textContent = NET.role === 'host' ? 'Hosting · code ' + NET.code : 'Host on this laptop (P1)';

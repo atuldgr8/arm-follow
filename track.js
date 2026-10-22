@@ -15,7 +15,7 @@
 const SET = {
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
-  mirror: true, smooth: 0.35, solo: false,
+  mirror: true, smooth: 0.5, solo: false,
   reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
   mpSplit: true,         // 1 space: look for one person in each half of the picture
   mpModel: 'lite',       // 'lite' | 'full'
@@ -36,8 +36,8 @@ const SET = {
   curl: true,            // fingers curl when lifeless, twitch back on return
   lyingFollow: true,     // lying arm still follows P2, sluggishly and late
   twitch: true,          // small twitches when P2 moves a lot
-  lag: 0.6,              // how late the lying arm follows (s)
-  lyingStrength: 0.35,   // how strongly the lying arm follows
+  lag: 0.25,             // how late the lying arm follows (s)
+  lyingStrength: 0.7,    // how strongly the lying arm follows
   returnStyle: 'strings',// 'strings' (jerky, dangling, a little too slow) | 'glide' (smooth, mechanical)
   returnTime: 1.4,       // seconds the strings take
   overshoot: true,       // snaps into the shoulder with a small overshoot
@@ -48,7 +48,9 @@ const SET = {
   assist: 0.6,           // near the cube, hands are drawn onto its sides (0 = off)
   edgeBuffer: 0.45,      // new cubes stand at least this far (m) inside your measured floor, so your reach stays in the camera
   touch: 0.08,           // how close a palm has to be to count as touching (m)
-  task: 'lift',          // level 1 'lift' (above the waist, hold) | level 2 'carry' (set it down on the other plinth)
+  warmup: false,         // an optional warm-up first: lift one cube above the waist and hold it; then the game (carry it to the other plinth)
+  fpNear: true,          // the view switches to first person near the cube, and again near the plinth to set it down on
+  thread: true,          // a thread from the fallen arm to the body's shoulder
   holdTime: 2,           // seconds above the waist to finish
   areaW: 2.0, areaD: 1.4,
   spawnLR: true,         // new cubes appear mostly to the left and right (on the other side from you)// real floor you can walk, where new cubes may appear (m)
@@ -97,10 +99,13 @@ class OneEuro {
     return this.x;
   }
 }
-// the feel slider: 0 = raw and quick, 1 = calm and slow. Limbs and body position are smoothed separately:
-// limbs stay quick (fast moves pass straight through), the body's distance from the camera is the noisiest guess, so it's calmer
-function feel() { let s = SET.smooth; return { minC: 6 * Math.pow(0.1, s), beta: 6 * Math.pow(0.12, s) }; }
-function feelBody() { let s = SET.smooth; return { minC: 3 * Math.pow(0.1, s), beta: 3 * Math.pow(0.1, s), minZ: 1.2 * Math.pow(0.15, s), betaZ: 1.0 * Math.pow(0.2, s) }; }
+// SMOOTHING, as in the main build (V13.1): every point is filtered in the camera picture (pixels),
+// once per camera frame, with the One Euro filter; then the body glides from where it was drawn to
+// the newest position over one camera interval, so it moves at the screen's rate.
+// The feel slider: 0 = most responsive, 0.5 = the main build's default, 1 = smoothest.
+function feelPx() { let s = SET.smooth; return { minC: 4 * Math.pow(0.0625, s), beta: 0.02 * Math.pow(0.1, s), glide: Math.min(1, 0.3 + 1.4 * s) }; }
+// for the computer partner and anything else still smoothed in metres
+function feel() { let s = SET.smooth; return { minC: 4 * Math.pow(0.0625, s), beta: 2 * Math.pow(0.1, s) }; }
 function handK() { return Math.min(1, 0.85 * Math.pow(0.3, SET.smooth)); }   // smoothing for palm directions
 
 // =====================================================================
@@ -127,27 +132,28 @@ function setPerson(id, key, raw, now, smoothIt) {
   let p = people[id];
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
-  if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; }
-  let t = now / 1000, fz = feel(), fb = feelBody(), j = {};
-  if (!smoothIt) { for (let n of JN) { if (raw.j[n]) j[n] = raw.j[n]; } }
-  else {
-    // the body's place (pelvis) on its own, calmer in depth; every joint relative to it, quick
-    let P = raw.j.pelvis, fp = p.fp || (p.fp = [new OneEuro(), new OneEuro(), new OneEuro()]);
-    let pel = V(fp[0].filter(P.x, t, fb.minC, fb.beta), fp[1].filter(P.y, t, fb.minC, fb.beta), fp[2].filter(P.z, t, fb.minZ, fb.betaZ));
+  if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; p.distT = raw.distT; }
+  let t = now / 1000, fz = feel(), j = {}, glide = smoothIt === 'glide';
+  if (smoothIt === true) {
     for (let n of JN) {
       let q = raw.j[n]; if (!q) continue;
-      if (n === 'pelvis') { j[n] = pel; continue; }
-      let r = vsub(q, P), f = p.f[n] || (p.f[n] = [new OneEuro(), new OneEuro(), new OneEuro()]);
-      j[n] = vadd(pel, V(f[0].filter(r.x, t, fz.minC, fz.beta), f[1].filter(r.y, t, fz.minC, fz.beta), f[2].filter(r.z, t, fz.minC, fz.beta)));
+      let f = p.f[n] || (p.f[n] = [new OneEuro(), new OneEuro(), new OneEuro()]);
+      j[n] = V(f[0].filter(q.x, t, fz.minC, fz.beta), f[1].filter(q.y, t, fz.minC, fz.beta), f[2].filter(q.z, t, fz.minC, fz.beta));
     }
-  }
-  if (p.j && p.lastSeen) {
+  } else { for (let n of JN) { if (raw.j[n]) j[n] = raw.j[n]; } }
+  let last = p.jTo || p.j;
+  if (last && p.lastSeen) {
     let dt = Math.max(0.005, (now - p.lastSeen) / 1000);
-    p.vel = vlerp(p.vel, vmul(vsub(j.pelvis, p.j.pelvis), 1 / dt), 0.35);
+    p.vel = vlerp(p.vel, vmul(vsub(j.pelvis, last.pelvis), 1 / dt), 0.35);
   }
-  p.j = j;
+  if (glide) {
+    // glide from where it's drawn now to the newest position, over about one camera interval
+    let interval = p.lastSeen ? Math.min(150, Math.max(16, now - p.lastSeen)) : 0;
+    p.jFrom = p.j ? Object.assign({}, p.j) : j; p.jTo = j; p.gT0 = now; p.gDur = interval * feelPx().glide;
+    if (!p.j) p.j = j;
+  } else { p.jTo = null; p.j = j; }
   // palms: from the hand model when it found this hand, else from the body model's hand points
-  let k = smoothIt ? handK() : 1;
+  let k = smoothIt === true ? handK() : glide ? Math.min(1, handK() * 1.6) : 1;
   for (let s of ['L', 'R']) {
     let h = (raw.hands && raw.hands[s]) || handFromPose(j, s, p.chir);
     if (!h) { p.hands[s] = null; continue; }
@@ -165,9 +171,18 @@ function setPerson(id, key, raw, now, smoothIt) {
   // swapping your left and right side (when you're side-on), not a real turn, so it's ignored
   let step = wrap180(yaw - p.yaw);
   if (!p.yawSeen) { p.yaw = yaw; p.yawSeen = true; }
-  else if (!smoothIt || Math.abs(step) < 120) p.yaw = wrap180(p.yaw + step * (smoothIt ? 0.25 : 1));
+  else if (!smoothIt || Math.abs(step) < 120) p.yaw = wrap180(p.yaw + step * (smoothIt ? 0.35 : 1));
   if (!p.home) p.home = { x: j.pelvis.x, z: j.pelvis.z };
   p.lastSeen = now; p.lost = false;
+}
+// each screen frame: the webcam people glide toward their newest position
+function glidePeople(now) {
+  for (let k of [1, 2]) {
+    let p = people[k]; if (!p || !p.jTo) continue;
+    let u = p.gDur > 0 ? clamp((now - p.gT0) / p.gDur, 0, 1) : 1, j = {};
+    for (let n in p.jTo) { let a = p.jFrom[n], b = p.jTo[n]; j[n] = a ? vlerp(a, b, u) : b; }
+    p.j = j;
+  }
 }
 function agePeople(now) {
   for (let k of [1, 2]) {
@@ -259,45 +274,95 @@ function mpTick(now) {
   MP.handsFound = MP.handsFound.filter(h => now - h.t < 250);
   MP.found = found.map(f => f.lm);
   let sx = SET.mirror ? -1 : 1, chir = SET.mirror ? 1 : -1, list = [];
+  // first, just enough to tell people apart (size and place in the picture)
   for (let { lm, wl } of found) {
-    // how far away: real torso length (metres) against its size in the picture
     let sImg = vmid(lm[11], lm[12]), hImg = vmid(lm[23], lm[24]);
     let torsoPx = Math.max(20, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
-    let sW = vmid(wl[11], wl[12]), hW = vmid(wl[23], wl[24]);
-    let torsoM = clamp(Math.hypot(sW.x - hW.x, sW.y - hW.y), 0.35, 0.7);
-    let d = clamp(fpx * torsoM / torsoPx, 0.8, 8);
-    let lat = (hImg.x - 0.5) * 2 * d * tanH;
-    let pel = V(sx * lat, 0.95, d);
-    let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
-    let j = { pelvis: pel };
-    for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
-    // reaching toward the camera: the body model is poor at depth, but an arm pointing at the camera
-    // looks short in the picture. Knowing its real length, how short it looks says how far it points at you.
-    if (SET.reach === 'picture') {
-      let mPx = d / fpx;   // metres per picture pixel at this distance
-      for (let s of ['L', 'R']) {
-        for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
-          let ia = MPJ[a + s], ib = MPJ[b + s];
-          if ((lm[ib].visibility !== undefined && lm[ib].visibility < 0.3)) continue;
-          let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
-          let wv = vsub(wl[ib], wl[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
-          let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
-          let sign = wv.z < 0.02 ? -1 : 1;   // usually reaching forward (toward the camera)
-          let from = j[a + s], prev = j[b + s];
-          let nb = V(from.x + sx * px, from.y - py, from.z + sign * dz);
-          let shift = vsub(nb, prev);
-          j[b + s] = nb;
-          if (b === 'el') { for (let c of ['wr', 'in', 'pi', 'th']) { j[c + s] = vadd(j[c + s], shift); } }
-          else { for (let c of ['in', 'pi', 'th']) { j[c + s] = vadd(j[c + s], shift); } }
-        }
-      }
-    }
-    j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
-    list.push({ key: null, j, chir, lm, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y }, ankY: Math.max(lm[27].y, lm[28].y), dist: d });   // size: torso height as a share of the picture
+    list.push({ key: null, lm, wl, chir, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y } });
   }
   matchHands(list, sx, chir);
-  ingest(list, now);
+  // then the followed people: filtered in the picture, and built into metres
+  let picked = pickPeople(list, now);
+  for (let k in picked) { let c = picked[k]; setPerson(+k, null, buildPerson(+k, c, now, W, H, fpx, tanH, sx), now, 'glide'); }
   TRK.status = 'MediaPipe: ' + list.length + ' tracked' + (MP.hands ? ' · ' + MP.handsFound.length + ' hands' : '');
+}
+
+// ---------------- one followed person, from the camera picture ----------------
+const MPF = {};   // per slot: the One Euro filters for the picture points and the 3D points, and a little memory
+function filterPts(arr, store, t, scale, withZ, fz) {
+  return arr.map((q, i) => {
+    if (!q) return q;
+    let f = store[i] || (store[i] = { x: new OneEuro(), y: new OneEuro(), z: new OneEuro() });
+    return { x: f.x.filter(q.x * scale.x, t, fz.minC, fz.beta) / scale.x, y: f.y.filter(q.y * scale.y, t, fz.minC, fz.beta) / scale.y,
+      z: withZ ? f.z.filter(q.z * scale.x, t, fz.minC, fz.beta) / scale.x : q.z, visibility: q.visibility };
+  });
+}
+function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
+  let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, torsoRef: 0, arm: {} });
+  let t = now / 1000, fz = feelPx();
+  let lm = filterPts(c.lm, M.lm, t, { x: W, y: H }, false, fz);
+  let wl = filterPts(c.wl, M.wl, t, { x: 1000, y: 1000 }, true, fz);   // 3D points in millimetres, as in the main build
+  let sImg = vmid(lm[11], lm[12]), hImg = vmid(lm[23], lm[24]);
+  let torsoPx = Math.max(20, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
+  let sW = vmid(wl[11], wl[12]), hW = vmid(wl[23], wl[24]);
+  // the torso's length as the camera sees it (its up-down and sideways part only), so a torso tipped
+  // toward the camera looks shorter in both, and the distance doesn't jump
+  let torsoM = clamp(Math.hypot(sW.x - hW.x, sW.y - hW.y), 0.12, 0.7);
+
+  // WHERE YOU STAND. Gold standard for one camera: your feet are on the floor, so where your feet
+  // are in the picture says how far away you are (the measured floor knows the camera's view of it).
+  // Bending, leaning and reaching don't move your feet, so they no longer move the body.
+  let r = CAL.rect, ankL = lm[27], ankR = lm[28], feetSeen = [ankL, ankR].every(a => a && (a.visibility === undefined || a.visibility > 0.5) && a.y < 0.985);
+  let d = null, latX = hImg.x, src = 'torso';
+  // (while measuring the floor, the torso's size is used, so the floor and its fit share one scale)
+  let dT = clamp(fpx * torsoM / torsoPx, 0.8, 8);
+  if (r && r.fa !== undefined && feetSeen && !CAL.active) {
+    let ay = Math.max(ankL.y, ankR.y), dz = r.fb / Math.max(1e-4, ay - r.fa);
+    if (ay - r.fa > 0.005 && dz > 0.5 && dz < 10) { d = dz; latX = (ankL.x + ankR.x) / 2; src = 'feet'; }
+  }
+  if (d === null) {
+    // no feet (or no measured floor): fall back on the torso's size, but not while you bend.
+    // Bending makes the torso look shorter, which would look like a jump backwards: hold still instead.
+    M.torsoRef = M.torsoRef ? (torsoPx > M.torsoRef ? torsoPx : M.torsoRef + (torsoPx - M.torsoRef) * 0.04) : torsoPx;
+    let bending = torsoPx < 0.82 * M.torsoRef;
+    if (bending && M.d !== null) { d = M.d; src = 'held'; } else d = dT;
+    if (src === 'held' && r && feetSeen === false && M.lat !== undefined) latX = M.lat;
+  }
+  M.d = d; M.lat = latX; M.src = src;
+  let lat = (latX - 0.5) * 2 * d * tanH;
+  let pel = V(sx * lat, 0.95, d);
+  let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
+  let j = { pelvis: pel };
+  for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
+
+  // ARMS from the picture, where MediaPipe is strongest: the direction you see, plus how far it points
+  // at the camera (an arm pointing at you looks short; knowing its real length says how short).
+  // A hand that leaves the picture keeps its last direction for a moment instead of flailing.
+  let mPx = d / fpx;
+  for (let s of ['L', 'R']) {
+    let mem = M.arm[s] || (M.arm[s] = {});
+    let wr = lm[MPJ['wr' + s]], el = lm[MPJ['el' + s]];
+    let lost = [wr, el].some(q => !q || (q.visibility !== undefined && q.visibility < 0.3) || q.y < 0.01 || q.y > 0.995 || q.x < 0.005 || q.x > 0.995);
+    if (lost && mem.rel && now - mem.t < 900) {
+      for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { j[c2 + s] = vadd(j['sh' + s], mem.rel[c2]); }
+      continue;
+    }
+    if (SET.reach === 'picture') {
+      for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
+        let ia = MPJ[a + s], ib = MPJ[b + s];
+        let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
+        let wv = vsub(wl[ib], wl[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
+        let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
+        let sign = wv.z < 0.02 ? -1 : 1;   // usually reaching forward (toward the camera)
+        let nb = V(j[a + s].x + sx * px, j[a + s].y - py, j[a + s].z + sign * dz), shift = vsub(nb, j[b + s]);
+        j[b + s] = nb;
+        for (let c2 of (b === 'el' ? ['wr', 'in', 'pi', 'th'] : ['in', 'pi', 'th'])) { j[c2 + s] = vadd(j[c2 + s], shift); }
+      }
+    }
+    if (!lost) { mem.rel = {}; for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { mem.rel[c2] = vsub(j[c2 + s], j['sh' + s]); } mem.t = now; }
+  }
+  j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
+  return { key: null, j, chir: c.chir, lm: c.lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: d, distT: dT };
 }
 // give each hand the hand model found to the nearest wrist the body model found
 function matchHands(list, sx, chir) {
@@ -335,14 +400,15 @@ function handFromModel(wl, side, sx, chir) {
 function cameraList() { return navigator.mediaDevices.enumerateDevices().then(d => d.filter(x => x.kind === 'videoinput')).catch(() => []); }
 
 // a whole frame of people from the webcam
-function ingest(list, now) {
+function pickPeople(list, now) {
   TRK.hzFrames++;
   if (now - TRK.hzStart > 1000) { TRK.hz = TRK.hzFrames * 1000 / (now - TRK.hzStart); TRK.hzFrames = 0; TRK.hzStart = now; }
-  if (!list.length) return;
+  if (!list.length) return {};
   // which slots this camera fills: you (computer partner), this laptop's person (2 spaces), or both (1 space)
   let slots = SET.comp !== 'off' ? [SET.comp === 'P2' ? 1 : 2] : SET.spaces === 2 ? [NET.myId] : [1, 2];
-  let pick = LOCK.on ? pickLocked(list, slots, now) : pickBiggest(list, slots);
-  for (let k of slots) { if (pick[k]) setPerson(k, null, pick[k], now, true); }
+  let pick = LOCK.on ? pickLocked(list, slots, now) : pickBiggest(list, slots), out = {};
+  for (let k of slots) { if (pick[k]) out[k] = pick[k]; }
+  return out;
 }
 
 // WHO IS FOLLOWED. Before START: the biggest person in the picture (in 1 space the two
@@ -351,15 +417,17 @@ function ingest(list, now) {
 // people walking through the picture are ignored.
 const LOCK = { on: false, slots: {} };
 function pickBiggest(list, slots) {
+  // screen left/right, as shown (mirrored or not)
+  let sx = SET.mirror ? -1 : 1, scr = c => sx * (c.img.x - 0.5);
   let big = list.slice().sort((a, b) => b.size - a.size), out = {};
   if (slots.length === 1) { out[slots[0]] = big[0]; return out; }
-  if (big.length >= 2) { let two = big.slice(0, 2).sort((a, b) => a.j.pelvis.x - b.j.pelvis.x); out[1] = two[0]; out[2] = two[1]; return out; }
-  let p = big[0], best = null, bd = 0.5;
+  if (big.length >= 2) { let two = big.slice(0, 2).sort((a, b) => scr(a) - scr(b)); out[1] = two[0]; out[2] = two[1]; return out; }
+  let p = big[0], best = null, bd = 0.15;
   for (let k of [1, 2]) {
-    let s = people[k]; if (!s || !s.j) continue;
-    let d = Math.hypot(s.j.pelvis.x - p.j.pelvis.x, s.j.pelvis.z - p.j.pelvis.z); if (d < bd) { bd = d; best = k; }
+    let s = people[k]; if (!s || !s.img) continue;
+    let d = Math.hypot(s.img.x - p.img.x, s.img.y - p.img.y); if (d < bd) { bd = d; best = k; }
   }
-  out[best || (p.j.pelvis.x < 0 ? 1 : 2)] = p;
+  out[best || (scr(p) < 0 ? 1 : 2)] = p;
   return out;
 }
 function pickLocked(list, slots, now) {
@@ -465,7 +533,7 @@ function demoPeople(now, dt, which) {
       if (A.t > 9) { A.phase = 'walk'; A.t = 0; }   // give up and try again
     } else if (A.phase === 'lift') {
       reachHands = TASK.handTargets(1, Math.min(1, A.t / 1.4));
-      if (SET.task === 'carry' && CUBE.held && A.t > 1.4) {
+      if (taskMode() === 'carry' && CUBE.held && A.t > 1.4) {
         // level 2: keep the hands as they are (relative to the body) and walk them over to the other plinth
         A.hUp = TASK.handTargets(1, 1); A.hDown = TASK.handTargets(1, 0.03); A.hApart = TASK.handTargets(1, 0.03, 0.25);
         A.phase = 'carry'; A.t = 0;
@@ -560,5 +628,6 @@ function trackTick(now, dt) {
     TRK.hzFrames++;
     if (now - TRK.hzStart > 1000) { TRK.hz = TRK.hzFrames * 1000 / (now - TRK.hzStart); TRK.hzFrames = 0; TRK.hzStart = now; }
   }
+  glidePeople(now);
   agePeople(now);
 }

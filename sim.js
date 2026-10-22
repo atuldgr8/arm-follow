@@ -15,7 +15,9 @@ const ARM_LEN = [0.30, 0.27, 0.09];          // upper arm, forearm, palm
 const RADII = [0.06, 0.05, 0.04, 0.03];      // shoulder, elbow, wrist, fingertips (for floor contact)
 const CUBE_SIZE = 0.42, CH = CUBE_SIZE / 2;
 const PLINTH = { w: 0.5, h: 0.6, p: new V3(0, 0, -1.5) };
-const TARGET = { p: new V3(1.5, 0, -1.5), on: false };   // level 2: the plinth to carry the cube to
+const TARGET = { p: new V3(1.5, 0, -1.5), on: false };   // the plinth to carry the cube to
+// the game is carrying the cube to the other plinth; the optional warm-up is lifting the first one
+const taskMode = () => SET.warmup && TASK.score < 1 ? 'lift' : 'carry';
 const ROOM = { x: 4.5, zBack: -4.5, zFront: 4.5 };
 const toV3 = v => new V3(v.x, v.y, v.z);
 const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -271,7 +273,7 @@ function delayedPose(arm, tMs) {
 // the driver's arm shape, laid down on the floor where the arm lies
 function lyingTargets(arm, d) {
   let q = new THREE.Quaternion().setFromUnitVectors(toV3(d.u), arm.dirU0);
-  let flat = v => { let w = toV3(v).applyQuaternion(q); w.y = Math.max(-0.05, w.y * 0.3); return w.normalize(); };
+  let flat = v => { let w = toV3(v).applyQuaternion(q); w.y = Math.max(-0.05, w.y * 0.7); return w.normalize(); };   // it can lift off the floor a little, like it could work again
   let E = arm.restS.clone().addScaledVector(arm.dirU0, ARM_LEN[0]);
   let Wp = E.clone().addScaledVector(flat(d.fv), ARM_LEN[1]);
   return [null, E, Wp, Wp.clone().addScaledVector(flat(d.hf), ARM_LEN[2])];
@@ -323,7 +325,8 @@ function armStep(arm, dt, now) {
       break;
     case 'lying': {
       arm.life = Math.max(0, arm.life - dt * 3);
-      arm.curl += (lifelessCurl() - arm.curl) * Math.min(1, dt * 4);
+      let cT = SET.lyingFollow && tgt ? lifelessCurl() * 0.45 + openCurl(tgt.open) * 0.55 : lifelessCurl();   // the fingers still follow P2's hand, weakly
+      arm.curl += (cT - arm.curl) * Math.min(1, dt * 4);
       let d = SET.lyingFollow && arm.hist.length ? delayedPose(arm, now - SET.lag * 1000) : null;
       let T = d ? lyingTargets(arm, d) : null, k = 50 * SET.lyingStrength;
       physics(arm, dt, null, h => {
@@ -447,7 +450,7 @@ function touchInfo(p, n) {
 function lockCube(A, B, mode) {
   let mid = A.p.clone().add(B.p).multiplyScalar(0.5), a = B.p.clone().sub(A.p), ya = Math.atan2(-a.z, a.x);
   CUBE.off = rotY(CUBE.c.clone().sub(mid), -ya); CUBE.yawOff = CUBE.yaw - ya;
-  CUBE.lockSep = a.length(); CUBE.held = true; CUBE.mode = mode; CUBE.hands = [A.side, B.side]; CUBE.slip = 0;
+  CUBE.lockSep = a.length(); CUBE.held = true; CUBE.mode = mode; CUBE.hands = [A.side, B.side]; CUBE.slip = 0; CUBE.away = 0;
   logEvent('grip', { mode, sep: +CUBE.lockSep.toFixed(3) });
 }
 function dropCube(why) { CUBE.held = false; CUBE.vy = 0; CUBE.hands = null; CUBE.slip = 0; CUBE.dwell = 0; logEvent('drop', { why }); }
@@ -500,7 +503,13 @@ function gripStep(dt) {
       CUBE.slip = Math.max(0, (loose - 0.015) / 0.045) + (facing < 0.15 ? 0.6 : 0);
       CUBE.off.y -= CUBE.slip * 0.5 * dt;
       if (CUBE.off.y < -0.22) return dropCube('slipped out');
-    } else if (sep > CUBE.lockSep + 0.1) return dropCube('let go');
+    } else {
+      // held while your palms face each other, as if holding a box (overhead too); let go by
+      // opening your hands outward, or pulling them well apart
+      let dir = a.clone().normalize(), facing = Math.min(A.n.dot(dir), -B.n.dot(dir));
+      CUBE.away = facing < -0.15 ? (CUBE.away || 0) + dt : 0;
+      if (sep > CUBE.lockSep + 0.3 || CUBE.away > 0.35) return dropCube(CUBE.away > 0.35 ? 'opened hands' : 'let go');
+    }
     let mid = A.p.clone().add(B.p).multiplyScalar(0.5), ya = Math.atan2(-a.z, a.x);
     let want = mid.add(rotY(CUBE.off, ya)), k = Math.min(1, dt * 14);
     CUBE.c.lerp(want, k); CUBE.yaw += wrap180((ya + CUBE.yawOff - CUBE.yaw) * 180 / Math.PI) * Math.PI / 180 * k; CUBE.vy = 0;
@@ -561,7 +570,7 @@ function taskStep(dt) {
     return;
   }
   let done = false;
-  if (SET.task === 'carry') {
+  if (taskMode() === 'carry') {
     // level 2: set it down on the other plinth (let go, and it rests there)
     let onT = !CUBE.held && Math.abs(CUBE.c.x - TARGET.p.x) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.z - TARGET.p.z) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.y - (PLINTH.h + CH * CUBE.scale)) < 0.02;
     TASK.holdT = onT ? TASK.holdT + dt : 0;
@@ -597,7 +606,7 @@ function spawnCube(first) {
   }
   if (!pos) pos = new V3(START.x, 0, START.z - 2.5);
   PLINTH.p.copy(pos);
-  TARGET.on = SET.task === 'carry';
+  TARGET.on = taskMode() === 'carry';
   if (TARGET.on) {
     let cx = usable(1) ? VR.cx : START.x, lim = ROOM.x - 0.7, tx = 2 * cx - pos.x;
     if (Math.abs(tx - pos.x) < 1.6) tx = pos.x + (pos.x > cx ? -1.8 : 1.8);
@@ -664,24 +673,22 @@ function buildSnap() {
     let a = ARMS[s];
     arms[s] = { pts: a.pts.map(a3), n: a3(a.n), f: a3(a.f), curl: r3(a.curl), life: r3(a.life), owner: a.owner, state: a.state, as: r3(a.assist || 0) };
   }
-  // where P2 is in the room: a shadow ring, tied by a thread to the shoulder P2 drives.
-  // Walk your ring into the circle under the body and the arm comes back.
+  // where P2 is in the room: P2's shadow on the floor. Walk your shadow under the body and the arm comes back.
   let ghost = null, mine = p2Arms();
   let showG = SET.ghost === 'always' || (SET.ghost === 'auto' && ['apart', 'returning'].includes(FOLLOW.state));
   if (showG && FOLLOW.ref1 && live2() && mine.length) {
     let g = effGain();
-    ghost = { p: [r3(AV.root.x - g * FOLLOW.dvec.x), r3(AV.root.z - g * FOLLOW.dvec.z / Math.max(0.05, SET.depthDrift))], sh: mine[0],
-      zone: r3(0.6 * SET.tol * g), ok: FOLLOW.drift < 0.6 * SET.tol, root: [r3(AV.root.x), r3(AV.root.z)] };
+    ghost = { p: [r3(AV.root.x - g * FOLLOW.dvec.x), r3(AV.root.z - g * FOLLOW.dvec.z / Math.max(0.05, SET.depthDrift))], sh: mine[0], ok: FOLLOW.drift < 0.6 * SET.tol };
   }
   return { ok: true, body: b, yaw: r3(AV.yaw), arms, strings: SET.strings,
     cube: { c: a3(CUBE.c), yaw: r3(CUBE.yaw), s: r3(CUBE.scale), held: CUBE.held, appear: r3(CUBE.appear) },
-    plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], target: TARGET.on ? [r3(TARGET.p.x), r3(TARGET.p.z)] : null, ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
+    thread: SET.thread, plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], target: TARGET.on ? [r3(TARGET.p.x), r3(TARGET.p.z)] : null, ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
 }
 function hudSnap() {
   return { drift: r3(FOLLOW.drift), tol: SET.tol, turn: Math.round(FOLLOW.turn), turnTol: SET.turnTol, state: FOLLOW.state,
     score: TASK.score, hold: r3(TASK.holdT / SET.holdTime), flash: r3(TASK.flash), p1: !!live(1), p2: !!live2(), anyP2: p2Arms().length > 0,
     held: CUBE.held, slip: r3(CUBE.slip), touching: CUBE.touching || 0, dwell: r3(CUBE.dwell),
-    task: SET.task, nearT: AV.ok && TARGET.on ? r3(Math.hypot(TARGET.p.x - AV.root.x, TARGET.p.z - AV.root.z)) : 99,
+    task: taskMode(), nearT: AV.ok && TARGET.on ? r3(Math.hypot(TARGET.p.x - AV.root.x, TARGET.p.z - AV.root.z)) : 99,
     near: AV.ok ? r3(Math.hypot(CUBE.c.x - AV.root.x, CUBE.c.z - AV.root.z)) : 99, up: CUBE.held && AV.ok && CUBE.c.y - CH * CUBE.scale > AV.j.pelvis.y,
     lifeless: p2Arms().some(s => ARMS[s].state !== 'attached'), assist: r3(Math.max(ARMS.L.assist || 0, ARMS.R.assist || 0)) };
 }

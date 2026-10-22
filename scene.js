@@ -8,7 +8,7 @@
 
 // a plain white room; only the content is in colour (the cube, P2's arm, the rings)
 const COL = { body: 0xd8d8d4, p2: 0xff5a1f, dead: 0x8a8a86, cube: 0x2f5bff, plinth: 0xffffff, floor: 0xf1f1ee, wall: 0xf7f7f5, bg: 0xf7f7f5 };
-const SC = { exam: 0, renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
+const SC = { exam: 0, fp: 0, renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
 
 function sceneInit(container) {
   let renderer = SC.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -86,22 +86,20 @@ function sceneInit(container) {
   SC.parts.strings = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: 0x141414, transparent: true, opacity: 0.45 }));
   SC.parts.strings.frustumCulled = false; scene.add(SC.parts.strings);
   // P2's place, relative to the body (optional)
-  // where P2 is: a shadow ring on the floor, a thread from the shoulder P2 drives to it (lit at P2's end),
-  // and the circle under the body to walk it into
-  let gr = SC.parts.ghost = new THREE.Group(); gr.visible = false; scene.add(gr);
-  let flat = m => { m.rotation.x = -Math.PI / 2; return m; };
-  SC.parts.gShadow = flat(new THREE.Mesh(new THREE.CircleGeometry(0.2, 40), new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.16, depthWrite: false })));
-  SC.parts.gRing = flat(new THREE.Mesh(new THREE.RingGeometry(0.2, 0.235, 48), new THREE.MeshBasicMaterial({ color: COL.p2, transparent: true, opacity: 0.95, depthWrite: false })));
-  SC.parts.gZone = flat(new THREE.Mesh(new THREE.RingGeometry(0.97, 1, 72), new THREE.MeshBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.35, depthWrite: false })));
-  SC.parts.gBead = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 10), new THREE.MeshBasicMaterial({ color: COL.p2 }));
-  let tg = new THREE.BufferGeometry(), TN = 40;
+  // soft shadows on the floor: one under the body, and P2's (where P2 is in the room) while the arm is off.
+  // A thread runs from the fallen arm to the body's shoulder.
+  let sc = document.createElement('canvas'); sc.width = sc.height = 128;
+  let sx2 = sc.getContext('2d'), gd = sx2.createRadialGradient(64, 64, 4, 64, 64, 62);
+  gd.addColorStop(0, 'rgba(0,0,0,0.55)'); gd.addColorStop(0.55, 'rgba(0,0,0,0.28)'); gd.addColorStop(1, 'rgba(0,0,0,0)');
+  sx2.fillStyle = gd; sx2.fillRect(0, 0, 128, 128);
+  let shTex = new THREE.CanvasTexture(sc);
+  let blob = () => { let m = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.55), new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false })); m.rotation.x = -Math.PI / 2; scene.add(m); return m; };
+  SC.parts.bodyShadow = blob();
+  let gr = SC.parts.ghost = blob(); gr.visible = false;
+  let tg = new THREE.BufferGeometry(), TN = 32;
   tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TN * 3), 3));
-  let tc = new Float32Array(TN * 3), c0 = new THREE.Color(0x9a9a96), c1 = new THREE.Color(COL.p2);
-  for (let i = 0; i < TN; i++) { let c = c0.clone().lerp(c1, Math.pow(i / (TN - 1), 2.2)); tc.set([c.r, c.g, c.b], i * 3); }
-  tg.setAttribute('color', new THREE.BufferAttribute(tc, 3));
-  SC.parts.gThread = new THREE.Line(tg, new THREE.LineBasicMaterial({ vertexColors: true }));
-  SC.parts.gThread.frustumCulled = false;
-  for (let m of [SC.parts.gShadow, SC.parts.gRing, SC.parts.gZone, SC.parts.gBead, SC.parts.gThread]) { gr.add(m); }
+  SC.parts.gThread = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.55 }));
+  SC.parts.gThread.frustumCulled = false; SC.parts.gThread.visible = false; scene.add(SC.parts.gThread);
   // your measured floor: an outline on the floor, and grid walls that fade in near its edges (like a VR boundary)
   let cv = document.createElement('canvas'); cv.width = cv.height = 64;
   let cx = cv.getContext('2d'); cx.strokeStyle = 'rgba(160,220,255,1)'; cx.lineWidth = 3; cx.strokeRect(0, 0, 64, 64);
@@ -159,7 +157,8 @@ function sceneRender(S, dt) {
   seg(P.neck, b.neck, headC, 0.045);
   ball(P.head, headC, 0.1); P.head.scale.set(0.092, 0.112, 0.102);
   let first = SET.view === 'first';
-  P.head.visible = !first; P.neck.visible = !first;
+  let hideHead = first || SC.fp > 0.08;   // first person (or the first-person cut near the cube): no head in the way
+  P.head.visible = !hideHead; P.neck.visible = !hideHead;
   // legs and feet
   let fwd = new V3(Math.sin(S.yaw * Math.PI / 180), 0, -Math.cos(S.yaw * Math.PI / 180));
   for (let s of ['L', 'R']) {
@@ -202,27 +201,23 @@ function sceneRender(S, dt) {
   let pop = S.cube.appear > 0 ? 1 - S.cube.appear : 1;
   P.cube.scale.setScalar(Math.max(0.01, S.cube.s * (0.6 + 0.4 * smooth01(pop))));
   P.cube.material.emissive.setRGB(0.35 * S.hud.flash + 0.12 * S.hud.hold, 0.28 * S.hud.flash + 0.1 * S.hud.hold, 0.05 * S.hud.flash);
-  // where P2 is: shadow ring + thread from the shoulder, and the circle under the body to walk into
+  // soft shadows: under the body, and P2's while the arm is off (walk yours under the body)
+  P.bodyShadow.position.set(b.pelvis.x, 0.004, b.pelvis.z); P.bodyShadow.rotation.z = -S.yaw * Math.PI / 180;
   let G = S.ghost && S.ghost.p ? S.ghost : null;
   P.ghost.visible = !!G;
-  if (G) {
-    let gp = new V3(G.p[0], 0, G.p[1]), sh = (b['sh' + G.sh] || b.neck).clone(), t2 = performance.now() / 1000;
-    let pulse = 1 + 0.08 * Math.sin(t2 * 5);
-    P.gShadow.position.set(gp.x, 0.004, gp.z); P.gRing.position.set(gp.x, 0.006, gp.z); P.gRing.scale.setScalar(pulse);
-    P.gZone.position.set(G.root[0], 0.005, G.root[1]); P.gZone.scale.setScalar(Math.max(0.15, G.zone));
-    P.gZone.material.color.setHex(G.ok ? 0x12a150 : 0x1a1a1a); P.gZone.material.opacity = G.ok ? 0.85 : 0.35;
-    P.gRing.material.color.setHex(G.ok ? 0x12a150 : COL.p2);
-    // the thread sags more the further apart you are, and tightens as you come back
-    let end = gp.clone().setY(0.03), span = sh.distanceTo(end), sag = Math.min(0.9, 0.12 + span * 0.18);
-    let arr = P.gThread.geometry.attributes.position.array, TN = arr.length / 3;
+  if (G) { P.ghost.position.set(G.p[0], 0.005, G.p[1]); P.ghost.material.opacity = 0.8 + 0.2 * Math.sin(performance.now() / 400); }
+  // the thread: from the fallen arm's shoulder end to the body's shoulder, sagging on the floor between
+  let fallen = ['L', 'R'].find(s2 => S.arms[s2].owner === 2 && ['falling', 'lying'].includes(S.arms[s2].state));
+  P.gThread.visible = !!(S.thread && fallen);
+  if (P.gThread.visible) {
+    let from = fromArr(S.arms[fallen].pts[0]), to = b['sh' + fallen].clone(), arr = P.gThread.geometry.attributes.position.array, TN = arr.length / 3;
+    let span = from.distanceTo(to), sag = Math.min(1.2, 0.1 + span * 0.35);
     for (let i = 0; i < TN; i++) {
-      let u = i / (TN - 1), q = sh.clone().lerp(end, u);
-      q.y -= sag * 4 * u * (1 - u) * (1 - 0.15 * Math.sin(t2 * 2 + u * 6));
-      q.y = Math.max(0.02, q.y);
+      let u = i / (TN - 1), q = from.clone().lerp(to, u);
+      q.y = Math.max(0.01, q.y - sag * 4 * u * (1 - u));
       arr[i * 3] = q.x; arr[i * 3 + 1] = q.y; arr[i * 3 + 2] = q.z;
     }
     P.gThread.geometry.attributes.position.needsUpdate = true;
-    P.gBead.position.copy(end).setY(0.05 + 0.02 * Math.sin(t2 * 5));
   }
 
   drawFloorEdges(S.chap);
@@ -235,13 +230,14 @@ function sceneRender(S, dt) {
     if (ce.p2) P2.p2dot.position.set(ce.p2[0], 0.015, ce.p2[1]);
   }
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid
-  let fade = SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, bm = SC.parts.bodyMat;
+  // and while the view cuts to first person, the body fades so the camera doesn't pass through a solid torso
+  let fade = Math.min(SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, 1 - 0.65 * clamp(SC.fp * 4, 0, 1)), bm = SC.parts.bodyMat;
   if (Math.abs(bm.opacity - fade) > 0.005) { bm.opacity = fade; let t = fade < 0.99; if (bm.transparent !== t) { bm.transparent = t; bm.depthWrite = !t; bm.needsUpdate = true; } }
   cameraStep(S, dt, b);
   // P1's laptop records its camera, so P2's laptop can show the same view
   if (!isGuest()) {
     let dir = new V3(); SC.camera.getWorldDirection(dir);
-    S.cam = { p: a3(SC.camera.position), l: a3(SC.camera.position.clone().add(dir)), fov: SC.camera.fov, exam: r3(SC.exam) };
+    S.cam = { p: a3(SC.camera.position), l: a3(SC.camera.position.clone().add(dir)), fov: r3(SC.camera.fov), exam: r3(SC.exam), fp: r3(SC.fp) };
   }
   SC.renderer.render(SC.scene, SC.camera);
 }
@@ -304,7 +300,7 @@ function cameraStep(S, dt, b) {
     SC.controls.enabled = false;
     SC.camPos.copy(fromArr(S.cam.p)); SC.camLook.copy(fromArr(S.cam.l));   // already played back smoothly (net.js)
     if (cam.fov !== S.cam.fov) { cam.fov = S.cam.fov; cam.updateProjectionMatrix(); }
-    cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); SC.exam = S.cam.exam || 0; return;
+    cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); SC.exam = S.cam.exam || 0; SC.fp = S.cam.fp || 0; return;
   }
   // which way the view faces: never turns, keeps the cube ahead, or turns with the body (slowly)
   let yawT = 0;
@@ -336,7 +332,7 @@ function cameraStep(S, dt, b) {
   let look = root.clone().addScaledVector(fwd, 1.6).addScaledVector(right, -0.1).add(new V3(0, 0.75, 0));
   // near the cube (or holding it) the camera moves in to examine, so you can see where your hands are
   let c = fromArr(S.cube.c), d = Math.hypot(c.x - root.x, c.z - root.z);
-  let eT = SET.examine === 'off' ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
+  let eT = SET.examine === 'off' || SET.fpNear ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
   SC.exam += (eT - SC.exam) * Math.min(1, dt * 2.5);
   if (SC.exam > 0.001) {
     // anchored mostly on the cube (which holds still), not the body
@@ -350,7 +346,19 @@ function cameraStep(S, dt, b) {
     let e = smooth01(SC.exam);
     want.lerp(posE, e); look.lerp(lookE, e);
   }
-  let k = Math.min(1, dt * (5 - 2.5 * SC.exam));   // calmer still while examining
+  // FIRST PERSON near the cube, and again near the plinth to set it down on (a game-like cut, eased)
+  let h = S.hud || {}, carry = h.task === 'carry';
+  let fpWanted = SET.fpNear && ((!S.cube.held && h.near < SET.examineDist) || (S.cube.held && carry && S.target && h.nearT < SET.examineDist) || (S.cube.held && !carry));
+  SC.fp += ((fpWanted ? 1 : 0) - SC.fp) * Math.min(1, dt * 2.2);
+  let f = smooth01(SC.fp);
+  if (f > 0.001) {
+    let eye = b.head.clone().addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
+    let focus = S.cube.held && carry && S.target ? new V3(S.target[0], PLINTH.h + 0.1, S.target[1]) : c.clone();
+    want.lerp(eye, f); look.lerp(focus, f);
+  }
+  let fovT = 55 + 25 * f;
+  if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov = fovT; cam.updateProjectionMatrix(); }
+  let k = Math.min(1, dt * (5 - 2.5 * SC.exam + 10 * f));   // calmer while examining; close on the head in first person
   SC.camPos.lerp(want, k); SC.camLook.lerp(look, k);
   cam.position.copy(SC.camPos); cam.lookAt(SC.camLook);
 }
