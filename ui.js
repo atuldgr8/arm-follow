@@ -25,11 +25,25 @@ function hudStep(S) {
   $('hud-label').style.color = apart ? '#E5372A' : '#1A1A1A';
   $('score').textContent = 'CUBES ' + h.score;
   if (h.score !== lastScore) { lastScore = h.score; $('score').style.transform = 'scale(1.35)'; setTimeout(() => { $('score').style.transform = ''; }, 260); }
-  $('hold').style.opacity = h.hold > 0.01 ? 1 : 0;
+  $('hold').style.opacity = h.hold > 0.01 && h.task !== 'carry' ? 1 : 0;
   let et = edgeText(); $('edge').style.display = et ? 'block' : 'none'; $('edge').textContent = et;
   $('calib').style.display = CAL.active && RUN.phase !== 'setup' ? 'flex' : 'none';   // in setup the start card shows it
   if (CAL.active) $('calib-text').innerHTML = 'Walk to your front, back, left and right edges<br>' + (CAL.live ? rectW(CAL.live).toFixed(1) + ' × ' + rectD(CAL.live).toFixed(1) + ' m so far' : 'waiting for someone in the camera') + '<br>press C (or the button) when done';
   $('hold').querySelector('.fill').style.width = (clamp(h.hold, 0, 1) * 100) + '%';
+  // what to do next, in a few words
+  let pr = '';
+  if (RUN.phase === 'play' && h.p1) {
+    if (h.state === 'apart') pr = 'P2: follow your thread back · walk your ring into the circle';
+    else if (h.held && h.task === 'carry') pr = h.nearT < 1.0 ? 'HELD · set it down on the blue-marked plinth' : 'HELD · carry it to the blue-marked plinth →';
+    else if (h.task === 'carry' && h.hold > 0) pr = 'placed ✓';
+    else if (h.held && h.up) pr = 'HELD · keep it up';
+    else if (h.held) pr = 'HELD · lift it above your waist ↑';
+    else if (h.lifeless && h.near < 1.6) pr = 'the arm is lifeless · it can’t hold';
+    else if (h.touching === 1) pr = 'one hand on · the other on the opposite side';
+    else if (h.near < 1.3) pr = 'both hands on the sides of the cube';
+  }
+  $('prompt').textContent = pr; $('prompt').style.opacity = pr ? 1 : 0;
+  $('prompt').classList.toggle('held', !!h.held); $('prompt').classList.toggle('apart', h.state === 'apart');
 }
 function statsStep(S) {
   let el = $('stats'); el.style.display = SET.hud ? 'block' : 'none'; if (!SET.hud) return;
@@ -38,7 +52,7 @@ function statsStep(S) {
   let armTxt = arms ? ['L', 'R'].map(s => s + ' ' + (arms[s].owner === 2 ? 'P2' : 'P1') + ' ' + arms[s].state).join(' · ') : '-';
   let lines = [
     `ARM FOLLOW v1 · ${TRK.status} · ${TRK.hz.toFixed(1)} Hz · dropouts ${TRK.dropouts} (${(TRK.dropouts / mins).toFixed(1)}/min)${SET.solo ? ' · SOLO' : ''}${SET.comp !== 'off' ? ' · COMPUTER plays ' + SET.comp : ''}`,
-    `${SET.spaces === 2 ? '2 SPACES · ' + (NET.role || 'offline') + ' · ' + NET.status + (NET.rtt ? ' · ping ' + Math.round(NET.rtt) + ' ms' : '') : '1 SPACE'} · P1 ${h && h.p1 ? 'tracked' : '-'} · P2 ${h && h.p2 ? 'tracked' : '-'}`,
+    `${SET.spaces === 2 ? '2 SPACES · ' + (NET.role || 'offline') + ' · ' + NET.status + (NET.rtt ? ' · ping ' + Math.round(NET.rtt) + ' ms' : '') + (NET.connected ? ' · in ' + NET.rxRate.toFixed(0) + '/s' + (NET.role === 'host' ? ' · P2 body ' + Math.round(performance.now() - NET.bodyT) + ' ms ago' : '') : '') : '1 SPACE'} · P1 ${h && h.p1 ? 'tracked' : '-'} · P2 ${h && h.p2 ? 'tracked' : '-'}`,
     h ? `follow ${h.state} · drift ${h.drift.toFixed(2)} / ${h.tol} m · turn ${h.turn}° / ${h.turnTol}° · lost ${TASK.lost}` : '',
     `arms ${armTxt}`,
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
@@ -75,11 +89,14 @@ function pipStep() {
     if (MP.halves) { x.strokeStyle = 'rgba(255,255,255,0.45)'; x.setLineDash([6, 6]); for (let u of [0.4, 0.6]) { x.beginPath(); x.moveTo(u * w, 0); x.lineTo(u * w, h); x.stroke(); } x.setLineDash([]); }
     // which person is which: nearest pelvis in the picture to each slot's last picture
     for (let lm of MP.found || []) {
+      // followed: in colour, labelled. Anyone else the camera sees: grey and dashed, marked "ignored"
       let slot = [1, 2].find(k => people[k] && people[k].lm === lm) || 0;
-      let col = slot === 2 ? 'rgba(255,154,74,0.95)' : 'rgba(255,255,255,0.95)';
-      x.strokeStyle = col; x.fillStyle = col; x.lineWidth = 2.5; x.lineCap = 'round';
+      let col = slot === 2 ? 'rgba(255,120,60,0.98)' : slot === 1 ? 'rgba(255,255,255,0.98)' : 'rgba(170,170,170,0.7)';
+      x.strokeStyle = col; x.fillStyle = col; x.lineWidth = slot ? 3 : 1.5; x.lineCap = 'round'; x.setLineDash(slot ? [] : [4, 4]);
       for (let [a, b] of PIP_BONES) { if (lm[a] && lm[b]) { x.beginPath(); x.moveTo(lm[a].x * w, lm[a].y * h); x.lineTo(lm[b].x * w, lm[b].y * h); x.stroke(); } }
-      if (slot) { x.save(); x.translate(lm[0].x * w, lm[0].y * h - 18); if (SET.mirror) x.scale(-1, 1); x.font = 'bold 12px monospace'; x.textAlign = 'center'; x.fillText('P' + slot, 0, 0); x.restore(); }
+      x.setLineDash([]);
+      x.save(); x.translate(lm[0].x * w, lm[0].y * h - 18); if (SET.mirror) x.scale(-1, 1); x.font = 'bold 12px monospace'; x.textAlign = 'center';
+      x.fillText(slot ? 'P' + slot + (LOCK.on ? ' · locked' : '') : 'ignored', 0, 0); x.restore();
     }
     // the floor this laptop uses (or the one being measured), outlined on the picture; the centre during the walk to it
     let my = isGuest() ? 2 : 1, fr = CAL.active ? Object.assign({}, CAL.live || {}, { fa: (CAL.rect || {}).fa, fb: (CAL.rect || {}).fb }) : usable(my);
@@ -92,6 +109,11 @@ function pipStep() {
         let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
         if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
       }
+    }
+    // locked on, but the locked person wasn't matched just now
+    if (LOCK.on && LOCK.miss) {
+      let mine = SET.spaces === 2 ? [NET.myId] : [1, 2], miss = mine.filter(k => LOCK.miss[k] && performance.now() - LOCK.miss[k] < 400);
+      if (miss.length) { x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(229,55,42,0.95)'; x.font = 'bold 12px monospace'; x.fillText('P' + miss.join('+P') + ' not matched · Setup re-picks who is followed', 8, h - 10); x.restore(); }
     }
     x.strokeStyle = 'rgba(120,230,255,0.95)'; x.lineWidth = 1.5;
     for (let hd of MP.handsFound || []) { for (let [a, b] of HAND_BONES) { x.beginPath(); x.moveTo(hd.lm[a].x * w, hd.lm[a].y * h); x.lineTo(hd.lm[b].x * w, hd.lm[b].y * h); x.stroke(); } }
@@ -165,9 +187,12 @@ function setupPanel() {
   let tog = (id, key, after) => { $(id).onclick = () => { SET[key] = !SET[key]; if (after) after(); updatePanel(); }; };
   tog('btn-mirror', 'mirror'); tog('btn-solo', 'solo');
   tog('btn-puppet', 'puppetFall'); tog('btn-curl', 'curl'); tog('btn-lyingf', 'lyingFollow'); tog('btn-twitch', 'twitch');
-  tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-ghost', 'ghost'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
+  tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
   sl('fov', 'fov', v => v + '°'); sl('feel', 'smooth', v => v.toFixed(2));
+  sel('reach', 'reach'); sel('ghost', 'ghost'); sel('task', 'task', () => { if (!isGuest()) { if (CUBE.held) dropCube('task changed'); spawnCube(false); } });
+  sl('ddrift', 'depthDrift', v => v === 0 ? 'not at all' : v === 1 ? 'fully' : Math.round(v * 100) + '%');
+  sl('assist', 'assist', v => v === 0 ? 'off' : v.toFixed(2)); sl('ebuf', 'edgeBuffer', v => Math.round(v * 100) + ' cm'); sl('netsm', 'netSmooth', v => v + ' ms');
   sl('cdelay', 'compDelay', v => v.toFixed(2) + ' s'); sl('cspeed', 'compSpeed', v => v.toFixed(2) + ' m/s');
   sl('tol', 'tol', v => v.toFixed(2) + ' m'); sl('turn', 'turnTol', v => v + '°');
   sl('lag', 'lag', v => v.toFixed(2) + ' s'); sl('lstr', 'lyingStrength', v => v.toFixed(2)); sl('rtime', 'returnTime', v => v.toFixed(1) + ' s');
@@ -212,22 +237,24 @@ function updatePanel() {
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
   set('btn-mirror', 'Mirror: ', SET.mirror);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
-  set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings); set('btn-ghost', 'Ghost of P2: ', SET.ghost);
+  set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
   $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
   $('spawnlr').value = SET.spawnLR ? '1' : '0';
-  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
+  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit'], ['reach', 'reach'], ['ghost', 'ghost'], ['task', 'task']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
-  for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain']]) { $(id).value = SET[key]; }
+  for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain'], ['ddrift', 'depthDrift'], ['assist', 'assist'], ['ebuf', 'edgeBuffer'], ['netsm', 'netSmooth']]) { $(id).value = SET[key]; }
+  $('val-ddrift').textContent = SET.depthDrift === 0 ? 'not at all' : SET.depthDrift === 1 ? 'fully' : Math.round(SET.depthDrift * 100) + '%';
+  $('val-assist').textContent = SET.assist === 0 ? 'off' : SET.assist.toFixed(2); $('val-ebuf').textContent = Math.round(SET.edgeBuffer * 100) + ' cm'; $('val-netsm').textContent = SET.netSmooth + ' ms';
   $('val-tol').textContent = SET.tol.toFixed(2) + ' m'; $('val-turn').textContent = SET.turnTol + '°'; $('val-gain').textContent = '1 m → ' + SET.gain.toFixed(1) + ' m';
   let cam = SET.source === 'mediapipe', floorOn = !!usable(1);
   cond('g-mp', cam); cond('g-split', SET.spaces === 1); cond('g-comp', cam); cond('comp-row', SET.comp !== 'off');
   cond('net-row', SET.spaces === 2); cond('g-roomfit', SET.spaces === 2);
   cond('g-gain', !(floorOn && SET.calUse !== 'cubes')); cond('g-area', !(floorOn && SET.calUse !== 'gain')); cond('g-edged', SET.edgeWarn);
-  cond('own-row', SET.own === 'custom'); cond('g-exam', SET.examine !== 'off');
+  cond('own-row', SET.own === 'custom'); cond('g-holdt', SET.task === 'lift'); cond('g-exam', SET.examine !== 'off');
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = netNiceStatus(); $('net-status').classList.toggle('ok', NET.connected);
   $('btn-host').classList.toggle('on', NET.role === 'host'); $('btn-host').textContent = NET.role === 'host' ? 'Hosting · code ' + NET.code : 'Host on this laptop (P1)';

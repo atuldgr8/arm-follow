@@ -126,7 +126,8 @@ function realOf(v) {
 }
 // a new cube somewhere the body can actually reach (the first one at the far end of your floor)
 function spawnInFloor(first) {
-  let u = usable(1), ins = 0.15, best = null, bestD = -1;
+  // keep in from the edges by a reach (SET.edgeBuffer), so stretching out for the cube stays in the camera
+  let u = usable(1), ins = Math.max(0.05, Math.min(SET.edgeBuffer, rectW(usable(1)) / 2 - 0.05, rectD(usable(1)) / 2 - 0.05)), best = null, bestD = -1;
   if (SET.spawnLR) {
     // mostly left and right: the far side from where P1 stands now, near the middle front to back
     let p = live(1), cx = (u.x0 + u.x1) / 2, cz = (u.z0 + u.z1) / 2, side = first || !p ? (Math.random() < 0.5 ? -1 : 1) : (p.j.pelvis.x > cx ? -1 : 1);

@@ -34,12 +34,15 @@
     .meter .mark { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink); opacity: 0.45; }
     .meter .zone { position: absolute; left: 0; top: 0; bottom: 0; width: 60%; background: transparent; transition: background 0.3s; }
     #score { position: absolute; top: 16px; right: 20px; font-size: 12px; letter-spacing: 2px; color: var(--ink); background: var(--card); border: 1px solid var(--edge); padding: 6px 12px; border-radius: 999px; pointer-events: none; transition: transform 0.2s; }
-    #hold { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 200px; pointer-events: none; opacity: 0; transition: opacity 0.2s; text-align: center; font-size: 11px; letter-spacing: 2px; color: var(--ink); }
+    #hold { position: absolute; top: 66px; left: 50%; transform: translateX(-50%); width: 200px; pointer-events: none; opacity: 0; transition: opacity 0.2s; text-align: center; font-size: 11px; letter-spacing: 2px; color: var(--ink); }
     #hold .meter .fill { background: #F5B800; }
+    #prompt { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--edge); color: var(--ink); font-size: 12px; letter-spacing: 0.5px; padding: 7px 14px; border-radius: 999px; pointer-events: none; opacity: 0; transition: opacity 0.25s; white-space: nowrap; }
+    #prompt.held { background: #2F5BFF; border-color: #2F5BFF; color: #fff; }
+    #prompt.apart { background: #FF5A1F; border-color: #FF5A1F; color: #fff; }
     #waiting { position: absolute; top: 46%; width: 100%; text-align: center; font-size: 15px; color: var(--ink2); pointer-events: none; }
     #stats { position: absolute; left: 12px; bottom: 12px; font: 11px/1.45 var(--mono); color: var(--ink); background: rgba(255,255,255,0.88); border: 1px solid var(--edge); padding: 9px 11px; border-radius: 12px; white-space: pre; pointer-events: none; max-width: calc(100% - 40px); overflow: hidden; }
     #pip { position: absolute; right: 14px; bottom: 14px; pointer-events: none; display: none; border-radius: 14px; box-shadow: 0 0 0 1px var(--edge), 0 8px 24px rgba(0,0,0,0.08); }
-    #edge { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid #2F5BFF; color: #2F5BFF; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; pointer-events: none; display: none; }
+    #edge { position: absolute; top: 146px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid #2F5BFF; color: #2F5BFF; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; pointer-events: none; display: none; }
     #calib { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(247,247,245,0.7); pointer-events: none; text-align: center; }
     #calib .big { font-size: 22px; letter-spacing: 5px; color: var(--ink); } #calib .small { font-size: 13px; color: var(--ink2); margin-top: 12px; line-height: 1.7; }
     #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 15px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 6; }
@@ -146,6 +149,7 @@
       </div>
       <div id="score">CUBES 0</div>
       <div id="hold"><div style="margin-bottom:6px">HOLD</div><div class="meter"><div class="fill"></div></div></div>
+      <div id="prompt"></div>
       <div id="waiting"></div>
       <div id="edge"></div>
       <div id="centre"><div class="big">Walk onto the green ring</div><div class="small" id="centre-who"></div></div>
@@ -177,6 +181,7 @@
           <div class="cond" id="g-mp" data-why="Webcam settings · choose Webcam as the source">
           <div class="f"><label>Camera</label><select id="cam"></select></div>
           <div class="f"><label>Hand tracking<span class="tip" title="Body model: 4 points per hand, steady at a distance, rough palm direction. Hand model: 21 points, sees which way the palm faces and how open the hand is, but may drop out at 2–3 m.">ⓘ</span></label><select id="hands"><option value="pose">Body model only (4 points per hand)</option><option value="hand">Add the hand model (21 points)</option></select></div>
+          <div class="f"><label>Reaching toward the camera<span class="tip" title="From the picture: an arm pointing at the camera looks short, and knowing its real length tells how far it points at you (new, better for reaching forward). Body model: MediaPipe's own depth guess (old).">ⓘ</span></label><select id="reach"><option value="picture">From how short the arm looks (new)</option><option value="model">The body model's depth guess (old)</option></select></div>
           <div class="f"><label>Body model</label><select id="mpmodel"><option value="lite">Lite (fast)</option><option value="full">Full (steadier, slower)</option></select></div>
           <div class="f"><label>Webcam field of view<span class="tip" title="Used to guess how far away you are">ⓘ</span><span class="val" id="val-fov"></span></label><input type="range" id="fov" min="40" max="110" step="1"></div>
           <div class="cond" id="g-split" data-why="Finding two people · 1 space only">
@@ -203,6 +208,7 @@
           <div class="f"><button class="act wide" id="btn-host">Host on this laptop (P1)</button></div>
           <div class="f"><div class="joinrow"><input type="text" id="net-code" maxlength="4" placeholder="Host’s code"><button class="act" id="btn-join">Join as P2</button></div><label class="check"><input type="checkbox" id="net-local"> Same computer test (two tabs)</label></div>
           <div class="f"><div id="net-status">offline</div><button class="act danger" id="btn-leave">Disconnect</button></div>
+          <div class="f"><label>P2’s view runs behind by<span class="tip" title="P2’s laptop shows P1’s world this far behind, blending between updates so it moves smoothly instead of in jumps. More = smoother but later. P2’s own possessed arm is always instant.">ⓘ</span><span class="val" id="val-netsm"></span></label><input type="range" id="netsm" class="world" min="0" max="150" step="10"></div>
           </div>
 
         </div>
@@ -211,6 +217,7 @@
         <summary><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 17l9 4 9-4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M12 3v10"/></svg></span><span class="st">Floor</span></summary>
         <div class="card">
           <div class="f"><div class="note" id="cal-status"></div><div class="btnrow"><button class="act" id="btn-cal3">Calibrate floor</button><button class="act" id="btn-calclear">Forget floor</button></div></div>
+          <div class="f"><label>Keep cubes in from the edges<span class="tip" title="New cubes stand at least this far inside your measured floor, so reaching out for them keeps your arms in the camera.">ⓘ</span><span class="val" id="val-ebuf"></span></label><input type="range" id="ebuf" class="world" min="0" max="1" step="0.05"></div>
           <div class="f"><label>New cubes appear</label><select id="spawnlr" class="world"><option value="1">Mostly left and right (the other side from you)</option><option value="0">Anywhere you can reach</option></select></div>
           <div class="f"><label>The measured floor sets<span class="tip" title="Walk gain: your floor stretches to fill the room (up to 4×). Where cubes appear: always somewhere you can reach.">ⓘ</span></label><select id="caluse" class="world"><option value="both">The walk gain + where cubes appear</option><option value="gain">Only the walk gain</option><option value="cubes">Only where cubes appear</option></select></div>
           <div class="cond" id="g-roomfit" data-why="Rooms of different sizes · 2 spaces only">
@@ -244,7 +251,8 @@
         <div class="card">
           <div class="f"><label>Drift tolerance<span class="val" id="val-tol"></span></label><input type="range" id="tol" class="world" min="0.1" max="1.5" step="0.05"></div>
           <div class="f"><label>Turning tolerance<span class="val" id="val-turn"></span></label><input type="range" id="turn" class="world" min="10" max="120" step="5"></div>
-          <button class="sw world" id="btn-ghost" title="A ring on the floor showing where P2 is, compared to the body"></button>
+          <div class="f"><label>Steps toward/away count<span class="tip" title="How much walking toward or away from the camera counts in the drift. Webcams guess distance from how big you look, so leaning in to reach looks like a step forward and can knock the arm off. 1 = fully, 0 = only left-right counts.">ⓘ</span><span class="val" id="val-ddrift"></span></label><input type="range" id="ddrift" class="world" min="0" max="1" step="0.05"></div>
+          <div class="f"><label>Where P2 is (thread + ring)<span class="tip" title="A shadow ring where P2 is in the room, tied by a thread to the shoulder P2 drives. P2 walks the ring into the circle under the body and the arm comes back. Both laptops see it.">ⓘ</span></label><select id="ghost" class="world"><option value="auto">While the arm is off</option><option value="always">Always</option><option value="off">Off</option></select></div>
 
         </div>
       </details>
@@ -274,10 +282,14 @@
       <details data-key="pickup" open style="--tint:#FFD23F">
         <summary><span class="ico dark"><svg viewBox="0 0 24 24"><rect x="5" y="9" width="14" height="11" rx="1.5"/><path d="M9 9V6.5a3 3 0 0 1 6 0V9"/></svg></span><span class="st">Picking up</span> <span class="tip" title="The big two-hand cube. Palms moving apart lets go in every grip; a lifeless arm can’t hold.">ⓘ</span></summary>
         <div class="card">
-          <div class="f"><label>Grip</label><select id="grip" class="world"><option value="squeeze">Squeeze to hold (slips if you ease off)</option><option value="palm">Palms facing = grip</option><option value="touch">Just touching (no gesture)</option><option value="dwell">Dwell 0.5 s (fallback)</option></select></div>
+          <div class="f"><label>Task<span class="tip" title="Level 1: lift the cube above the body’s waist and hold it there. Level 2: carry it across to the other plinth (its top is marked in blue) and set it down there.">ⓘ</span></label><select id="task" class="world"><option value="lift">Level 1 · lift it above the waist</option><option value="carry">Level 2 · carry it to the other plinth</option></select></div>
+          <div class="f"><label>Grip</label><select id="grip" class="world"><option value="touch">Both hands on the sides (sticky)</option><option value="squeeze">Squeeze to hold (slips if you ease off)</option><option value="palm">Palms facing = grip</option><option value="dwell">Dwell 0.5 s (fallback)</option></select></div>
           <div class="f"><label>Which hands can hold</label><select id="holders" class="world"><option value="any">Any hand</option><option value="possessed">Only possessed hands</option></select><div class="note warn" id="holders-note"></div></div>
+          <div class="f"><label>Hand assist<span class="tip" title="Near the cube, hands are drawn onto its sides and turned to face it, more strongly the closer they are; once held they stay on the sides. Letting go still uses where your hands really are. 0 = off.">ⓘ</span><span class="val" id="val-assist"></span></label><input type="range" id="assist" class="world" min="0" max="1" step="0.05"></div>
           <div class="f"><label>Touching distance<span class="tip" title="How close a palm has to be to count as touching. Webcam depth is a guess, so this is generous.">ⓘ</span><span class="val" id="val-touch"></span></label><input type="range" id="touch" class="world" min="0.03" max="0.2" step="0.01"></div>
+          <div class="cond" id="g-holdt" data-why="Hold time · level 1 only">
           <div class="f"><label>Hold above the waist for<span class="val" id="val-hold"></span></label><input type="range" id="hold-t" class="world" min="0.5" max="5" step="0.5"></div>
+          </div>
 
         </div>
       </details>
@@ -319,7 +331,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.7 · 23 Oct 00:00'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.8 · 23 Oct 02:00'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

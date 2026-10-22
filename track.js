@@ -15,7 +15,8 @@
 const SET = {
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
-  mirror: true, smooth: 0.5, solo: false,
+  mirror: true, smooth: 0.35, solo: false,
+  reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
   mpSplit: true,         // 1 space: look for one person in each half of the picture
   mpModel: 'lite',       // 'lite' | 'full'
   fov: 65,               // webcam field of view, for the distance estimate
@@ -43,8 +44,11 @@ const SET = {
   strings: true,         // show the strings while lifeless or being pulled back
   // ---- picking up ----
   holders: 'any',        // 'any' hand | 'possessed' hands only
-  grip: 'squeeze',       // 'squeeze' | 'palm' (palm facing) | 'touch' (just touching) | 'dwell'
+  grip: 'touch',         // 'squeeze' | 'palm' (palm facing) | 'touch' (just touching) | 'dwell'
+  assist: 0.6,           // near the cube, hands are drawn onto its sides (0 = off)
+  edgeBuffer: 0.45,      // new cubes stand at least this far (m) inside your measured floor, so your reach stays in the camera
   touch: 0.08,           // how close a palm has to be to count as touching (m)
+  task: 'lift',          // level 1 'lift' (above the waist, hold) | level 2 'carry' (set it down on the other plinth)
   holdTime: 2,           // seconds above the waist to finish
   areaW: 2.0, areaD: 1.4,
   spawnLR: true,         // new cubes appear mostly to the left and right (on the other side from you)// real floor you can walk, where new cubes may appear (m)
@@ -56,7 +60,9 @@ const SET = {
   examineDist: 1.3,      // how close to the cube (m, in the room) before it starts moving in
   xray: true,            // near the cube the body fades so your arms and the cube show through          // how far the body itself may turn, left or right (180 = no limit)
   gain: 2,               // virtual metres per real metre
-  ghost: false,          // a ring on the floor where P2 is, relative to the body
+  ghost: 'auto',         // where P2 is in the room (a shadow ring, on a thread from the shoulder): 'auto' (while the arm is off) | 'always' | 'off'
+  depthDrift: 0.5,       // how much stepping toward/away from the camera counts in the drift (leaning in to reach looks like a step)
+  netSmooth: 60,         // P2's laptop: how far behind (ms) it shows P1's world, so it moves smoothly instead of in jumps
   // ---- debug ----
   hud: true, pip: true,   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
@@ -91,8 +97,11 @@ class OneEuro {
     return this.x;
   }
 }
-function feel() { let s = SET.smooth; return { minC: 4 * Math.pow(0.0625, s), beta: 2 * Math.pow(0.1, s) }; }
-function handK() { return 0.6 * Math.pow(0.25, SET.smooth); }   // smoothing for palm directions
+// the feel slider: 0 = raw and quick, 1 = calm and slow. Limbs and body position are smoothed separately:
+// limbs stay quick (fast moves pass straight through), the body's distance from the camera is the noisiest guess, so it's calmer
+function feel() { let s = SET.smooth; return { minC: 6 * Math.pow(0.1, s), beta: 6 * Math.pow(0.12, s) }; }
+function feelBody() { let s = SET.smooth; return { minC: 3 * Math.pow(0.1, s), beta: 3 * Math.pow(0.1, s), minZ: 1.2 * Math.pow(0.15, s), betaZ: 1.0 * Math.pow(0.2, s) }; }
+function handK() { return Math.min(1, 0.85 * Math.pow(0.3, SET.smooth)); }   // smoothing for palm directions
 
 // =====================================================================
 // PEOPLE: slot 1 = P1 (body owner), slot 2 = P2 (the arm)
@@ -101,7 +110,7 @@ const JN = ['pelvis', 'neck', 'head', 'shL', 'elL', 'wrL', 'inL', 'piL', 'thL', 
   'hipL', 'knL', 'anL', 'hipR', 'knR', 'anR'];
 const TRK = { status: 'demo people', hz: 0, hzFrames: 0, hzStart: 0, dropouts: 0, since: performance.now() };
 const people = { 1: null, 2: null };
-const LOST_MS = 600;
+const LOST_MS = 600, NET_LOST_MS = 1500;   // P2 over the link may pause a moment without being gone
 
 // the palm from the body model's four hand points (wrist, index, pinky, thumb)
 // palm normal: for a right hand, (wrist→fingers) × (index→pinky); the left hand is the mirror of that
@@ -119,12 +128,18 @@ function setPerson(id, key, raw, now, smoothIt) {
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
   if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; }
-  let t = now / 1000, fz = feel(), j = {};
-  for (let n of JN) {
-    let q = raw.j[n]; if (!q) continue;
-    if (!smoothIt) { j[n] = q; continue; }
-    let f = p.f[n] || (p.f[n] = [new OneEuro(), new OneEuro(), new OneEuro()]);
-    j[n] = V(f[0].filter(q.x, t, fz.minC, fz.beta), f[1].filter(q.y, t, fz.minC, fz.beta), f[2].filter(q.z, t, fz.minC, fz.beta));
+  let t = now / 1000, fz = feel(), fb = feelBody(), j = {};
+  if (!smoothIt) { for (let n of JN) { if (raw.j[n]) j[n] = raw.j[n]; } }
+  else {
+    // the body's place (pelvis) on its own, calmer in depth; every joint relative to it, quick
+    let P = raw.j.pelvis, fp = p.fp || (p.fp = [new OneEuro(), new OneEuro(), new OneEuro()]);
+    let pel = V(fp[0].filter(P.x, t, fb.minC, fb.beta), fp[1].filter(P.y, t, fb.minC, fb.beta), fp[2].filter(P.z, t, fb.minZ, fb.betaZ));
+    for (let n of JN) {
+      let q = raw.j[n]; if (!q) continue;
+      if (n === 'pelvis') { j[n] = pel; continue; }
+      let r = vsub(q, P), f = p.f[n] || (p.f[n] = [new OneEuro(), new OneEuro(), new OneEuro()]);
+      j[n] = vadd(pel, V(f[0].filter(r.x, t, fz.minC, fz.beta), f[1].filter(r.y, t, fz.minC, fz.beta), f[2].filter(r.z, t, fz.minC, fz.beta)));
+    }
   }
   if (p.j && p.lastSeen) {
     let dt = Math.max(0.005, (now - p.lastSeen) / 1000);
@@ -157,7 +172,7 @@ function setPerson(id, key, raw, now, smoothIt) {
 function agePeople(now) {
   for (let k of [1, 2]) {
     let p = people[k]; if (!p) continue;
-    if (!p.lost && now - p.lastSeen > LOST_MS) { p.lost = true; TRK.dropouts++; logEvent('dropout', { slot: k }); }
+    if (!p.lost && now - p.lastSeen > (p.key === 'net' ? NET_LOST_MS : LOST_MS)) { p.lost = true; TRK.dropouts++; logEvent('dropout', { slot: k }); }
     if (now - p.lastSeen > 4000) people[k] = null;
   }
 }
@@ -256,6 +271,27 @@ function mpTick(now) {
     let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
     let j = { pelvis: pel };
     for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
+    // reaching toward the camera: the body model is poor at depth, but an arm pointing at the camera
+    // looks short in the picture. Knowing its real length, how short it looks says how far it points at you.
+    if (SET.reach === 'picture') {
+      let mPx = d / fpx;   // metres per picture pixel at this distance
+      for (let s of ['L', 'R']) {
+        for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
+          let ia = MPJ[a + s], ib = MPJ[b + s];
+          if ((lm[ib].visibility !== undefined && lm[ib].visibility < 0.3)) continue;
+          let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
+          let wv = vsub(wl[ib], wl[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
+          let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
+          let sign = wv.z < 0.02 ? -1 : 1;   // usually reaching forward (toward the camera)
+          let from = j[a + s], prev = j[b + s];
+          let nb = V(from.x + sx * px, from.y - py, from.z + sign * dz);
+          let shift = vsub(nb, prev);
+          j[b + s] = nb;
+          if (b === 'el') { for (let c of ['wr', 'in', 'pi', 'th']) { j[c + s] = vadd(j[c + s], shift); } }
+          else { for (let c of ['in', 'pi', 'th']) { j[c + s] = vadd(j[c + s], shift); } }
+        }
+      }
+    }
     j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
     list.push({ key: null, j, chir, lm, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y }, ankY: Math.max(lm[27].y, lm[28].y), dist: d });   // size: torso height as a share of the picture
   }
@@ -342,10 +378,12 @@ function pickLocked(list, slots, now) {
     list.forEach((c, i) => {
       if (used.has(i)) return;
       let r = c.size / L.size, d = Math.hypot(c.img.x - L.x, c.img.y - L.y);
-      if (r < 0.6 || r > 1.65 || d >= reach) return;
+      if (r < 0.4 || r > 2.5 || d >= reach) return;   // generous: leaning in to reach makes the torso look much shorter
       reach = d; best = i;
     });
-    if (best < 0) continue;
+    // only one person in this camera and one slot to fill: it's them
+    if (best < 0 && slots.length === 1 && list.length === 1) best = 0;
+    if (best < 0) { LOCK.miss = LOCK.miss || {}; LOCK.miss[k] = now; continue; }
     let c = list[best]; used.add(best); out[k] = c;
     L.x = c.img.x; L.y = c.img.y; L.size += (c.size - L.size) * 0.1; L.t = now;
   }
@@ -427,8 +465,23 @@ function demoPeople(now, dt, which) {
       if (A.t > 9) { A.phase = 'walk'; A.t = 0; }   // give up and try again
     } else if (A.phase === 'lift') {
       reachHands = TASK.handTargets(1, Math.min(1, A.t / 1.4));
+      if (SET.task === 'carry' && CUBE.held && A.t > 1.4) {
+        // level 2: keep the hands as they are (relative to the body) and walk them over to the other plinth
+        A.hUp = TASK.handTargets(1, 1); A.hDown = TASK.handTargets(1, 0.03); A.hApart = TASK.handTargets(1, 0.03, 0.25);
+        A.phase = 'carry'; A.t = 0;
+      }
       if (TASK.score !== DEMO.score) { DEMO.score = TASK.score; A.phase = 'let go'; A.t = 0; }
       if (!CUBE.held && A.t > 1.5) { A.phase = 'reach'; A.t = 0; }
+    } else if (A.phase === 'carry') {
+      reachHands = A.hUp;
+      let tr = realOf(TARGET.p.clone().add(new V3(0, 0, 0.47))), dx = tr.x - A.x, dz = tr.z - A.z, d = Math.hypot(dx, dz), step = 0.4 * dt;
+      if (d > 0.02) { A.x += dx / d * Math.min(step, d); A.z += dz / d * Math.min(step, d); moving = 1; }
+      else { A.phase = 'place'; A.t = 0; }
+      if (!CUBE.held && A.t > 0.5) { A.phase = 'walk'; A.t = 0; }   // dropped it: go back for it
+    } else if (A.phase === 'place') {
+      let k = Math.min(1, A.t / 0.9), mixH = (a, b, u) => ({ L: { wr: vlerp(a.L.wr, b.L.wr, u), n: a.L.n, f: a.L.f }, R: { wr: vlerp(a.R.wr, b.R.wr, u), n: a.R.n, f: a.R.f } });
+      reachHands = A.t < 1.0 ? mixH(A.hUp, A.hDown, k) : mixH(A.hDown, A.hApart, Math.min(1, (A.t - 1.0) / 0.4));
+      if (TASK.score !== DEMO.score || A.t > 3) { DEMO.score = TASK.score; A.phase = 'walk'; A.t = 0; A.trip++; }
     } else if (A.phase === 'let go') {
       reachHands = TASK.handTargets(1 - Math.min(1, A.t / 0.6), 1, 0.2 * Math.min(1, A.t / 0.4));
       if (A.t > 0.9) { A.phase = 'walk'; A.t = 0; A.trip++; }

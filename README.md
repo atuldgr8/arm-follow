@@ -6,6 +6,21 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
+
+## v1.8 changes (after the first real test)
+
+- **The link:** much lighter and faster. Updates go as plain text over a channel that never waits for a lost message (old ones are useless anyway), settings travel only when they change, and P1's laptop no longer drops P2 after a short gap (1.5 s instead of 0.6 s). P2's laptop plays P1's world a moment behind (**P2's view runs behind by**, Spaces, 60 ms) and blends between updates, so it moves smoothly instead of in jumps. P2's own possessed arm is still drawn instantly. The stats line shows how many updates arrive per second and, on P1's laptop, how long ago P2's body last arrived.
+- **Tracking feel:** less smoothing, and the slider's range moved (default 0.35). Limbs stay quick; the body's distance from the camera (the noisiest guess) is smoothed on its own.
+- **Reaching toward the camera** (Tracking): an arm pointing at the camera looks short in the picture; knowing its real length tells how far it points at you. Old: the body model's own depth guess, as a toggle.
+- **Who is followed** (camera view): the followed person is in colour and labelled; anyone else is grey, dashed and marked "ignored". If the locked person isn't matched, it says so. The lock is much more generous (leaning in to reach makes the torso look short, which used to lose P2), and if there's only one person in a camera, it's them.
+- **Where P2 is** (Follow rule, on by default while the arm is off): a shadow ring on the floor where P2 is in the room, tied by a thread to the shoulder P2 drives; the thread is lit at P2's end. Walk your ring into the circle under the body and the arm comes back (the circle turns green when you're close enough). Both laptops see it.
+- **Steps toward/away count** (Follow rule, 50%): leaning in to reach looks to a webcam like a step forward, which used to knock the arm off.
+- **Hand assist** (Picking up, 0.6): near the cube, hands are drawn onto its sides and turned to face it; once held they stay on the sides. Letting go still uses where your hands really are. The grip now starts on **Both hands on the sides (sticky)**.
+- **Prompts** under the meter: "both hands on the sides of the cube", "one hand on…", "HELD · lift it…", "P2: follow your thread back…".
+- **Task levels** (Picking up): Level 1 lift it above the waist; **Level 2 carry it to the other plinth** (top marked in blue, across the room left/right) and set it down.
+- **Keep cubes in from the edges** (Floor, 45 cm): cubes stand that far inside your measured floor, so reaching for them stays in the camera.
+- **The camera near the cube** follows a calmed copy of the body and is anchored on the cube, so the body's wobble isn't magnified.
+
 ## Files
 
 - `index.html`: the page, the control panel and the visitor HUD.

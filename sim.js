@@ -15,6 +15,7 @@ const ARM_LEN = [0.30, 0.27, 0.09];          // upper arm, forearm, palm
 const RADII = [0.06, 0.05, 0.04, 0.03];      // shoulder, elbow, wrist, fingertips (for floor contact)
 const CUBE_SIZE = 0.42, CH = CUBE_SIZE / 2;
 const PLINTH = { w: 0.5, h: 0.6, p: new V3(0, 0, -1.5) };
+const TARGET = { p: new V3(1.5, 0, -1.5), on: false };   // level 2: the plinth to carry the cube to
 const ROOM = { x: 4.5, zBack: -4.5, zFront: 4.5 };
 const toV3 = v => new V3(v.x, v.y, v.z);
 const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -115,7 +116,8 @@ function followStep() {
     logEvent('P2 here', {});
   }
   let k2 = p2Scale();   // rooms of different sizes, mapped: P2's steps scaled into P1's room
-  let dx = (a.j.pelvis.x - FOLLOW.ref1.x) - (b.j.pelvis.x - FOLLOW.ref2.x) * k2.x, dz = (a.j.pelvis.z - FOLLOW.ref1.z) - (b.j.pelvis.z - FOLLOW.ref2.z) * k2.z;
+  // stepping toward/away from the camera counts less (SET.depthDrift): leaning in to reach looks like a step
+  let dx = (a.j.pelvis.x - FOLLOW.ref1.x) - (b.j.pelvis.x - FOLLOW.ref2.x) * k2.x, dz = ((a.j.pelvis.z - FOLLOW.ref1.z) - (b.j.pelvis.z - FOLLOW.ref2.z) * k2.z) * SET.depthDrift;
   FOLLOW.dvec = { x: dx, z: dz };
   FOLLOW.drift = Math.hypot(dx, dz);
   FOLLOW.turn = Math.abs(wrap180((a.yaw - FOLLOW.yaw1) - (b.yaw - FOLLOW.yaw2)));
@@ -209,7 +211,8 @@ function become(arm, state) {
 
 // ---------------- physics ----------------
 function groundAt(x, z) {
-  return Math.abs(x - PLINTH.p.x) < PLINTH.w / 2 && Math.abs(z - PLINTH.p.z) < PLINTH.w / 2 ? PLINTH.h : 0;
+  let on = P => Math.abs(x - P.x) < PLINTH.w / 2 && Math.abs(z - P.z) < PLINTH.w / 2;
+  return on(PLINTH.p) || (TARGET.on && on(TARGET.p)) ? PLINTH.h : 0;
 }
 function link(a, b, L, wa, wb, minOnly) {
   let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz) || 1e-6;
@@ -239,13 +242,15 @@ function physics(arm, dt, pin, forces) {
     // the floor and the plinth: bounce (once, with puppet fall on), then slide to a stop
     for (let i = pin ? 1 : 0; i < 4; i++) {
       let p = P[i], q = Q[i], r = RADII[i];
-      let inX = Math.abs(p.x - PLINTH.p.x) < PLINTH.w / 2 + r, inZ = Math.abs(p.z - PLINTH.p.z) < PLINTH.w / 2 + r;
+      for (let PP of TARGET.on ? [PLINTH.p, TARGET.p] : [PLINTH.p]) {
+      let inX = Math.abs(p.x - PP.x) < PLINTH.w / 2 + r, inZ = Math.abs(p.z - PP.z) < PLINTH.w / 2 + r;
       if (inX && inZ && p.y < PLINTH.h + r) {
         if (PLINTH.h + r - p.y < 0.1) { let vy = p.y - q.y; p.y = PLINTH.h + r; q.y = p.y + Math.min(0, vy) * rest; }
         else {   // into the plinth's side: push back out sideways
-          let ox = PLINTH.w / 2 + r - Math.abs(p.x - PLINTH.p.x), oz = PLINTH.w / 2 + r - Math.abs(p.z - PLINTH.p.z);
-          if (ox < oz) p.x += Math.sign(p.x - PLINTH.p.x || 1) * ox; else p.z += Math.sign(p.z - PLINTH.p.z || 1) * oz;
+          let ox = PLINTH.w / 2 + r - Math.abs(p.x - PP.x), oz = PLINTH.w / 2 + r - Math.abs(p.z - PP.z);
+          if (ox < oz) p.x += Math.sign(p.x - PP.x || 1) * ox; else p.z += Math.sign(p.z - PP.z || 1) * oz;
         }
+      }
       }
       if (p.y < r) {
         let vy = p.y - q.y; p.y = r; q.y = p.y + Math.min(0, vy) * rest;
@@ -446,8 +451,41 @@ function lockCube(A, B, mode) {
   logEvent('grip', { mode, sep: +CUBE.lockSep.toFixed(3) });
 }
 function dropCube(why) { CUBE.held = false; CUBE.vy = 0; CUBE.hands = null; CUBE.slip = 0; CUBE.dwell = 0; logEvent('drop', { why }); }
+// HAND ASSIST: a palm near one of the cube's four sides is drawn onto it (and turned to face it),
+// more strongly the closer it is, so holding the cube looks and feels like holding it.
+// The raw palms are kept for letting go, so pulling your hands apart still drops it.
+function assistHands() {
+  if (!CUBE.snapHeld) { CUBE.raw = {}; for (let s of ['L', 'R']) { let arm = ARMS[s]; if (arm.state === 'attached') CUBE.raw[s] = palmOf(arm); } }
+  if (!SET.assist || CUBE.vanish > 0) return;
+  let ax = cubeAxes(), hs = CH * CUBE.scale, R = 0.06 + 0.22 * SET.assist;
+  for (let s of ['L', 'R']) {
+    let arm = ARMS[s]; if (arm.state !== 'attached') continue;
+    if (SET.holders === 'possessed' && arm.owner !== 2) continue;
+    let p = palmOf(arm), l = cubeLocal(p);
+    if (Math.abs(l.y) > hs + 0.06) continue;
+    let axis = Math.abs(l.x) >= Math.abs(l.z) ? 'x' : 'z', sg = Math.sign(axis === 'x' ? l.x : l.z) || 1;
+    let gap = Math.abs(axis === 'x' ? l.x : l.z) - hs;          // how far off the side (negative: inside)
+    let along = Math.abs(axis === 'x' ? l.z : l.x) - hs;          // past the side's edge
+    let held = CUBE.held && CUBE.hands && CUBE.hands.includes(s);
+    if (held !== !!CUBE.snapHeld) continue;     // before the grip: free hands; after the cube has moved: the holding hands
+    if (!held && (gap > R || along > 0.04)) continue;
+    let w = held ? 1 : smooth01(1 - Math.max(0, gap) / R) * (0.35 + 0.65 * SET.assist);
+    let out = ax[axis].clone().multiplyScalar(sg);
+    let target = p.clone().addScaledVector(out, -gap);            // onto the side
+    if (along > 0) target.addScaledVector(axis === 'x' ? ax.z : ax.x, -Math.sign(axis === 'x' ? l.z : l.x) * along);
+    let move = target.sub(p).multiplyScalar(w);
+    arm.pts[2].add(move); arm.pts[3].add(move);
+    arm.pts[1].addScaledVector(move, 0.4);
+    arm.n.lerp(out.clone().negate(), w * 0.8).normalize();
+    arm.assist = w;
+  }
+}
 function gripStep(dt) {
+  for (let s of ['L', 'R']) { ARMS[s].assist = 0; }
+  CUBE.snapHeld = false; assistHands();
   let hands = gripHands(), touch = hands.map(h => touchInfo(h.p, h.n));
+  // the holding hands move the cube from where they really are (not where they're drawn)
+  if (CUBE.held) for (let h of hands) { if (CUBE.raw[h.side] && CUBE.hands.includes(h.side)) h.p = CUBE.raw[h.side].clone(); }
   CUBE.touching = touch.filter(t => t).length;
   if (CUBE.vanish > 0) return;
   if (CUBE.held) {
@@ -462,9 +500,11 @@ function gripStep(dt) {
       CUBE.slip = Math.max(0, (loose - 0.015) / 0.045) + (facing < 0.15 ? 0.6 : 0);
       CUBE.off.y -= CUBE.slip * 0.5 * dt;
       if (CUBE.off.y < -0.22) return dropCube('slipped out');
-    } else if (sep > CUBE.lockSep + 0.08) return dropCube('let go');
+    } else if (sep > CUBE.lockSep + 0.1) return dropCube('let go');
     let mid = A.p.clone().add(B.p).multiplyScalar(0.5), ya = Math.atan2(-a.z, a.x);
-    CUBE.c.copy(mid).add(rotY(CUBE.off, ya)); CUBE.yaw = ya + CUBE.yawOff; CUBE.vy = 0;
+    let want = mid.add(rotY(CUBE.off, ya)), k = Math.min(1, dt * 14);
+    CUBE.c.lerp(want, k); CUBE.yaw += wrap180((ya + CUBE.yawOff - CUBE.yaw) * 180 / Math.PI) * Math.PI / 180 * k; CUBE.vy = 0;
+    CUBE.snapHeld = true; assistHands();   // and the hands are drawn on its sides
     return;
   }
   // not held: look for two hands on opposite sides
@@ -482,9 +522,14 @@ function gripStep(dt) {
   }
   if (found && SET.grip === 'dwell') { CUBE.dwell += dt; found.ok = CUBE.dwell >= 0.5; }
   else if (!found) CUBE.dwell = 0;
-  if (found && found.ok) { let [A, B] = found.A.side === 'L' ? [found.A, found.B] : [found.B, found.A]; lockCube(A, B, SET.grip); return; }
+  if (found && found.ok) {
+    let [A, B] = found.A.side === 'L' ? [found.A, found.B] : [found.B, found.A];
+    if (SET.assist && CUBE.raw[A.side] && CUBE.raw[B.side]) { A = Object.assign({}, A, { p: CUBE.raw[A.side].clone() }); B = Object.assign({}, B, { p: CUBE.raw[B.side].clone() }); }
+    lockCube(A, B, SET.grip); return;
+  }
   // falls onto the plinth or the floor
-  let support = (Math.abs(CUBE.c.x - PLINTH.p.x) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.z - PLINTH.p.z) < PLINTH.w / 2 + 0.05 ? PLINTH.h : 0) + CH * CUBE.scale;
+  let onP = P => Math.abs(CUBE.c.x - P.x) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.z - P.z) < PLINTH.w / 2 + 0.05;
+  let support = (onP(PLINTH.p) || (TARGET.on && onP(TARGET.p)) ? PLINTH.h : 0) + CH * CUBE.scale;
   CUBE.vy -= 9.8 * dt; CUBE.c.y += CUBE.vy * dt;
   if (CUBE.c.y < support) { CUBE.c.y = support; CUBE.vy = 0; }
   CUBE.c.x = clamp(CUBE.c.x, -ROOM.x + CH, ROOM.x - CH); CUBE.c.z = clamp(CUBE.c.z, ROOM.zBack + CH, ROOM.zFront - CH);
@@ -515,10 +560,19 @@ function taskStep(dt) {
     if (CUBE.vanish <= 0) spawnCube(false);
     return;
   }
-  let waist = AV.j.pelvis.y;
-  let up = CUBE.held && CUBE.c.y - CH * CUBE.scale > waist;
-  TASK.holdT = up ? TASK.holdT + dt : Math.max(0, TASK.holdT - dt * 2);
-  if (TASK.holdT >= SET.holdTime) {
+  let done = false;
+  if (SET.task === 'carry') {
+    // level 2: set it down on the other plinth (let go, and it rests there)
+    let onT = !CUBE.held && Math.abs(CUBE.c.x - TARGET.p.x) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.z - TARGET.p.z) < PLINTH.w / 2 + 0.05 && Math.abs(CUBE.c.y - (PLINTH.h + CH * CUBE.scale)) < 0.02;
+    TASK.holdT = onT ? TASK.holdT + dt : 0;
+    done = TASK.holdT >= 0.4;
+  } else {
+    let waist = AV.j.pelvis.y;
+    let up = CUBE.held && CUBE.c.y - CH * CUBE.scale > waist;
+    TASK.holdT = up ? TASK.holdT + dt : Math.max(0, TASK.holdT - dt * 2);
+    done = TASK.holdT >= SET.holdTime;
+  }
+  if (done) {
     TASK.score++; TASK.flash = 1; TASK.holdT = 0;
     logEvent('done', { score: TASK.score });
     CUBE.held = false; CUBE.hands = null; CUBE.vanish = 0.6;
@@ -543,6 +597,13 @@ function spawnCube(first) {
   }
   if (!pos) pos = new V3(START.x, 0, START.z - 2.5);
   PLINTH.p.copy(pos);
+  TARGET.on = SET.task === 'carry';
+  if (TARGET.on) {
+    let cx = usable(1) ? VR.cx : START.x, lim = ROOM.x - 0.7, tx = 2 * cx - pos.x;
+    if (Math.abs(tx - pos.x) < 1.6) tx = pos.x + (pos.x > cx ? -1.8 : 1.8);
+    TARGET.p.set(clamp(tx, -lim, lim), 0, pos.z);
+    if (Math.abs(TARGET.p.x - pos.x) < 1.2) TARGET.p.x = clamp(pos.x + (TARGET.p.x > pos.x ? -1.8 : 1.8), -lim, lim);
+  }
   CUBE.c.set(pos.x, PLINTH.h + CH, pos.z); CUBE.yaw = 0; CUBE.vy = 0; CUBE.held = false; CUBE.hands = null; CUBE.scale = 1; CUBE.vanish = 0; CUBE.appear = 1; CUBE.dwell = 0;
 }
 // for the demo people: where to stand, and where their wrists go to hold and lift the cube
@@ -601,18 +662,28 @@ function buildSnap() {
   let arms = {};
   for (let s of ['L', 'R']) {
     let a = ARMS[s];
-    arms[s] = { pts: a.pts.map(a3), n: a3(a.n), f: a3(a.f), curl: r3(a.curl), life: r3(a.life), owner: a.owner, state: a.state };
+    arms[s] = { pts: a.pts.map(a3), n: a3(a.n), f: a3(a.f), curl: r3(a.curl), life: r3(a.life), owner: a.owner, state: a.state, as: r3(a.assist || 0) };
   }
-  let ghost = null;
-  if (SET.ghost && FOLLOW.ref1 && live2()) ghost = [r3(AV.root.x - effGain() * FOLLOW.dvec.x), r3(AV.root.z - effGain() * FOLLOW.dvec.z)];
+  // where P2 is in the room: a shadow ring, tied by a thread to the shoulder P2 drives.
+  // Walk your ring into the circle under the body and the arm comes back.
+  let ghost = null, mine = p2Arms();
+  let showG = SET.ghost === 'always' || (SET.ghost === 'auto' && ['apart', 'returning'].includes(FOLLOW.state));
+  if (showG && FOLLOW.ref1 && live2() && mine.length) {
+    let g = effGain();
+    ghost = { p: [r3(AV.root.x - g * FOLLOW.dvec.x), r3(AV.root.z - g * FOLLOW.dvec.z / Math.max(0.05, SET.depthDrift))], sh: mine[0],
+      zone: r3(0.6 * SET.tol * g), ok: FOLLOW.drift < 0.6 * SET.tol, root: [r3(AV.root.x), r3(AV.root.z)] };
+  }
   return { ok: true, body: b, yaw: r3(AV.yaw), arms, strings: SET.strings,
     cube: { c: a3(CUBE.c), yaw: r3(CUBE.yaw), s: r3(CUBE.scale), held: CUBE.held, appear: r3(CUBE.appear) },
-    plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
+    plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], target: TARGET.on ? [r3(TARGET.p.x), r3(TARGET.p.z)] : null, ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
 }
 function hudSnap() {
   return { drift: r3(FOLLOW.drift), tol: SET.tol, turn: Math.round(FOLLOW.turn), turnTol: SET.turnTol, state: FOLLOW.state,
     score: TASK.score, hold: r3(TASK.holdT / SET.holdTime), flash: r3(TASK.flash), p1: !!live(1), p2: !!live2(), anyP2: p2Arms().length > 0,
-    held: CUBE.held, slip: r3(CUBE.slip), touching: CUBE.touching || 0, dwell: r3(CUBE.dwell) };
+    held: CUBE.held, slip: r3(CUBE.slip), touching: CUBE.touching || 0, dwell: r3(CUBE.dwell),
+    task: SET.task, nearT: AV.ok && TARGET.on ? r3(Math.hypot(TARGET.p.x - AV.root.x, TARGET.p.z - AV.root.z)) : 99,
+    near: AV.ok ? r3(Math.hypot(CUBE.c.x - AV.root.x, CUBE.c.z - AV.root.z)) : 99, up: CUBE.held && AV.ok && CUBE.c.y - CH * CUBE.scale > AV.j.pelvis.y,
+    lifeless: p2Arms().some(s => ARMS[s].state !== 'attached'), assist: r3(Math.max(ARMS.L.assist || 0, ARMS.R.assist || 0)) };
 }
 
 // the walk to the centre: the ring everyone walks onto (the middle of the room), and where P2 is
