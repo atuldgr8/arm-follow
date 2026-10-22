@@ -79,7 +79,7 @@ The **drift meter** at the top: the bar is the drift, the first tick is "comes b
 - **Show strings:** thin lines up from the shoulder and wrist, only while lifeless or being pulled back.
 - **Hangs limp on the shoulder** instead of falling off (toggle).
 
-Colours: P1's arms are warm white, a possessed arm is vermilion (P2), a lifeless arm fades to grey-brown.
+Colours: P1's arms are light grey, a possessed arm is vermilion (P2), a lifeless arm fades to dark grey.
 
 ## Picking up (the two-hand cube)
 
@@ -127,11 +127,11 @@ Each laptop measures its own floor. Press **Calibrate floor** (on the start card
 
 ## The panel
 
-Playful colour blocks: each section is its own loud card (Tracking sky blue, Spaces lilac, Floor mint, Who owns what orange, Follow rule lime, Lifeless arm pink, Picking up yellow, View coral), with round type, pill buttons and switches. A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Setup (back to the start card), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Hover the little **i** (or tap it) for an explanation; most switches and quick-bar buttons explain themselves on hover too. The panel remembers which sections you left open.
+Calm and mono-type (DM Mono): white cards on an off-white panel, thin lines, small type. Each section keeps its colour as a dot by its name (Tracking blue, Spaces lilac, Floor mint, Who owns what orange, Follow rule lime, Lifeless arm pink, Picking up yellow, View coral), and the same colour shows on its slider knobs and switches. A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Setup (back to the start card), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Hover the little **i** (or tap it) for an explanation; most switches and quick-bar buttons explain themselves on hover too. The panel remembers which sections you left open.
 
 ## The room
 
-A Barragán-ish courtyard: plaster walls in loud colours (pink at the back with an orange plane overlapping it, lilac on the left, yellow on the right), a pale stone floor in big slabs, open sky. The cube is cobalt, the plinth white plaster, the body warm white; a possessed arm is vermilion (P2).
+A plain white room. Only the content is in colour: the cobalt cube, P2's vermilion arm, the green ring.
 
 ## Keys
 

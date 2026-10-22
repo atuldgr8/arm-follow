@@ -6,9 +6,8 @@
 // Kept to plain parts (room, body, objects) so it can move to VR later.
 // ============================================================
 
-// a Barragán-ish courtyard: plaster walls in loud colours, a pale stone floor, open sky
-const COL = { body: 0xfbfaf7, p2: 0xff5a1f, dead: 0x8c8577, cube: 0x2f5bff, plinth: 0xf7f3ec, floor: 0xe9dcc8, bg: 0xa9d8f2,
-  wallBack: 0xee5a93, wallBack2: 0xff9a4d, wallL: 0x9d7be0, wallR: 0xf6c343 };
+// a plain white room; only the content is in colour (the cube, P2's arm, the rings)
+const COL = { body: 0xd8d8d4, p2: 0xff5a1f, dead: 0x8a8a86, cube: 0x2f5bff, plinth: 0xffffff, floor: 0xf1f1ee, wall: 0xf7f7f5, bg: 0xf7f7f5 };
 const SC = { exam: 0, renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
 
 function sceneInit(container) {
@@ -18,13 +17,13 @@ function sceneInit(container) {
   container.appendChild(renderer.domElement);
   let scene = SC.scene = new THREE.Scene();
   scene.background = new THREE.Color(COL.bg);
-  scene.fog = new THREE.Fog(COL.bg, 14, 34);
+  scene.fog = new THREE.Fog(COL.bg, 12, 30);
   SC.camera = new THREE.PerspectiveCamera(55, 1, 0.04, 60);
   SC.controls = new OrbitControls(SC.camera, renderer.domElement);
   SC.controls.enableDamping = true; SC.controls.enabled = false; SC.controls.maxPolarAngle = Math.PI * 0.495;
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xe9d9c2, 1.25));
-  let sun = new THREE.DirectionalLight(0xfff1dc, 1.9);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xf0f0ec, 1.6)); scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  let sun = new THREE.DirectionalLight(0xffffff, 1.1);
   sun.position.set(4, 6.5, 6.5); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 0.5, far: 20 });
@@ -35,20 +34,15 @@ function sceneInit(container) {
   let mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
   let floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.x * 2, ROOM.zFront - ROOM.zBack), mat(COL.floor));
   floor.rotation.x = -Math.PI / 2; floor.position.z = (ROOM.zFront + ROOM.zBack) / 2; floor.receiveShadow = true; scene.add(floor);
-  // the ground beyond the courtyard, fading into the sky
-  let ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), mat(0xdcc9ab)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; ground.receiveShadow = true; scene.add(ground);
-  // stone floor laid in big slabs (thin joints, like a Mies plinth)
-  let grid = new THREE.GridHelper(9, 9, 0xd6c4a8, 0xd6c4a8); grid.position.y = 0.002; scene.add(grid);
-  // plaster walls: pink at the back with an orange plane overlapping it, lilac on the left, yellow on the right
-  // plaster glows a little in sunlight, so the colours stay loud even in shade
-  let plaster = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, emissive: c, emissiveIntensity: 0.28 });
-  let wall = (w, h, c, x, z, ry) => { let m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), plaster(c)); m.position.set(x, h / 2, z); m.rotation.y = ry || 0; m.receiveShadow = true; m.castShadow = true; scene.add(m); return m; };
-  wall(ROOM.x * 2, 3.6, COL.wallBack, 0, ROOM.zBack - 0.06);
-  wall(3.2, 4.4, COL.wallBack2, ROOM.x - 1.3, ROOM.zBack + 0.08);
+  // faint floor joints
+  let grid = new THREE.GridHelper(9, 9, 0xe2e2de, 0xe2e2de); grid.position.y = 0.002; scene.add(grid);
+  // white walls
+  let wall = (w, h, x, z, ry) => { let m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat(COL.wall)); m.position.set(x, h / 2, z); m.rotation.y = ry || 0; m.receiveShadow = true; scene.add(m); return m; };
   let depth = ROOM.zFront - ROOM.zBack, mid = (ROOM.zFront + ROOM.zBack) / 2;
-  wall(depth, 2.6, COL.wallL, -ROOM.x - 0.06, mid, Math.PI / 2);
-  wall(depth * 0.7, 3.1, COL.wallR, ROOM.x + 0.06, ROOM.zBack + depth * 0.35, Math.PI / 2);
-  let startRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.31, 40), new THREE.MeshBasicMaterial({ color: 0xcdb896 }));
+  wall(ROOM.x * 2, 3, 0, ROOM.zBack);
+  wall(depth, 3, -ROOM.x, mid, Math.PI / 2);
+  wall(depth, 3, ROOM.x, mid, -Math.PI / 2);
+  let startRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.31, 40), new THREE.MeshBasicMaterial({ color: 0xcfcfca }));
   startRing.rotation.x = -Math.PI / 2; startRing.position.set(START.x, 0.004, START.z); scene.add(startRing);
 
   // ---- plinth and cube ----
@@ -60,7 +54,7 @@ function sceneInit(container) {
   scene.add(cube);
 
   // ---- the mannequin ----
-  SC.parts.bodyMat = new THREE.MeshStandardMaterial({ color: COL.body, roughness: 0.75 });
+  SC.parts.bodyMat = new THREE.MeshStandardMaterial({ color: COL.body, roughness: 0.7 });
   let B = SC.parts.body = new THREE.Group(); scene.add(B);
   let mk = (geo, m) => { let o = new THREE.Mesh(geo, m || SC.parts.bodyMat); o.castShadow = true; o.receiveShadow = true; B.add(o); return o; };
   SC.parts.cyl = new THREE.CylinderGeometry(1, 1, 1, 14);
