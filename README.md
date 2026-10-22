@@ -30,7 +30,7 @@ Switch **Source** to **Webcam (MediaPipe)** for real people. The **camera + skel
 2. On P1's laptop press **Host**: it shows a 4-letter code.
 3. On P2's laptop type the code and press **Join**.
 
-P1's laptop decides everything: the world, every setting, the view and the camera (P2 sees exactly P1's camera), and P2's tracking too. P1's Calibrate also starts and stops P2's floor measuring. On P2's laptop the whole panel is greyed out except **Disconnect**.
+P1's laptop decides everything: the world, every setting, the view and the camera (P2 sees exactly P1's camera), and P2's tracking too. P1's Calibrate also starts and stops P2's floor measuring. On P2's laptop the panel is greyed out except what its own camera needs (which camera, its field of view, mirroring) and **Disconnect**.
 
 To test on one computer, tick **Same computer test** and use two browser tabs.
 

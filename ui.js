@@ -212,9 +212,9 @@ function updatePanel() {
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = NET.status;
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
-  // linked as P2: everything is decided on P1's laptop; P2 can only leave
-  let lock = isGuest();
-  document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && el.id !== 'btn-leave'; });
+  // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
+  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror'];
+  document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
 

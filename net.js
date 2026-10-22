@@ -57,8 +57,9 @@ function unpackPerson(m) {
 }
 // settings P2's screen needs to draw the same world
 // P1's laptop decides everything; these stay per laptop because they only make sense locally
-const NET_LOCAL = ['comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit'];
-const NET_TRACKING = ['source', 'hands', 'mpModel', 'mirror'];   // changing these restarts P2's webcam
+// (P2 also keeps what depends on its own camera: which camera, its field of view, and mirroring)
+const NET_LOCAL = ['comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror'];
+const NET_TRACKING = ['source', 'hands', 'mpModel'];   // changing these restarts P2's webcam
 
 function netOn(m) {
   if (!m || typeof m !== 'object' || (NET.chan && m.from === NET.role)) return;
