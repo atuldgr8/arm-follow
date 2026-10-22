@@ -194,9 +194,15 @@
         <select id="view"><option value="behind">Behind the body (over the shoulder)</option><option value="first">First person (VR preview)</option><option value="orbit">Free orbit (drag)</option></select>
         <label>The view faces</label>
         <select id="camlock"><option value="forward">Always forward (never turns)</option><option value="cube">Toward the cube (lock-on)</option><option value="turn">Wherever the body faces (slowly)</option></select>
+        <label>Near the cube, the camera <span class="tip" title="As you get close to the cube (or while holding it) the camera moves in to examine, like in a game, so you can see where your hands are.">ⓘ</span></label>
+        <select id="examine"><option value="high">Moves up and looks down</option><option value="side">Moves to the side</option><option value="front">Moves in front, looking back at you</option><option value="off">Stays put</option></select>
+        <div class="cond" id="g-exam" data-why="How close · when the camera moves in">
+          <label>Starts moving in at <span class="val" id="val-examd"></span></label><input type="range" id="examd" min="0.6" max="3" step="0.1">
+        </div>
+        <button id="btn-xray" title="Near the cube the body fades, so your arms and the cube show through it"></button>
         <label>Body may turn up to <span class="tip" title="Past this the body stops turning. 180° = no limit.">ⓘ</span><span class="val" id="val-turnmax"></span></label><input type="range" id="turnmax" class="world" min="10" max="180" step="5">
       </details>
-      <div class="note" id="lock-all" style="display:none; color:#8ab4dc;">Linked as P2: the host sets the world (greyed out).</div>
+      <div class="note" id="lock-all" style="display:none; color:#8ab4dc;">Linked as P2: P1’s laptop decides everything here. You can only disconnect.</div>
       <div class="note">Keys: H hides this panel · F fullscreen</div>
     </div>
   </div>

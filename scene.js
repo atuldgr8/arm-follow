@@ -7,7 +7,7 @@
 // ============================================================
 
 const COL = { body: 0xd9dcdf, p2: 0xff9a4a, dead: 0x6a6e74, cube: 0xe6be6a, plinth: 0x3b4048, floor: 0x2a2d33, wall: 0x24272c, bg: 0x15171b };
-const SC = { renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
+const SC = { exam: 0, renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
 
 function sceneInit(container) {
   let renderer = SC.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -178,7 +178,15 @@ function sceneRender(S, dt) {
   if (S.ghost) P.ghost.position.set(S.ghost[0], 0.006, S.ghost[1]);
 
   drawFloorEdges(S.chap);
+  // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid
+  let fade = SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, bm = SC.parts.bodyMat;
+  if (Math.abs(bm.opacity - fade) > 0.005) { bm.opacity = fade; let t = fade < 0.99; if (bm.transparent !== t) { bm.transparent = t; bm.depthWrite = !t; bm.needsUpdate = true; } }
   cameraStep(S, dt, b);
+  // P1's laptop records its camera, so P2's laptop can show the same view
+  if (!isGuest()) {
+    let dir = new V3(); SC.camera.getWorldDirection(dir);
+    S.cam = { p: a3(SC.camera.position), l: a3(SC.camera.position.clone().add(dir)), fov: SC.camera.fov, exam: r3(SC.exam) };
+  }
   SC.renderer.render(SC.scene, SC.camera);
 }
 function drawFloorEdges(ch) {
@@ -235,6 +243,14 @@ function setView(v) {
 function cameraStep(S, dt, b) {
   let cam = SC.camera;
   if (!S || !S.ok) { cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.9, -1); return; }
+  // P2's laptop shows exactly what P1's camera shows
+  if (isGuest() && S.cam) {
+    SC.controls.enabled = false;
+    let k = Math.min(1, dt * 12);
+    SC.camPos.lerp(fromArr(S.cam.p), k); SC.camLook.lerp(fromArr(S.cam.l), k);
+    if (cam.fov !== S.cam.fov) { cam.fov = S.cam.fov; cam.updateProjectionMatrix(); }
+    cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); SC.exam = S.cam.exam || 0; return;
+  }
   // which way the view faces: never turns, keeps the cube ahead, or turns with the body (slowly)
   let yawT = 0;
   if (SET.camLock === 'turn') yawT = S.yaw * Math.PI / 180;
@@ -259,6 +275,19 @@ function cameraStep(S, dt, b) {
   // behind the body, over the right shoulder
   let want = root.clone().addScaledVector(fwd, -2.3).addScaledVector(right, 0.75).add(new V3(0, 2.15, 0));
   let look = root.clone().addScaledVector(fwd, 1.6).addScaledVector(right, -0.1).add(new V3(0, 0.75, 0));
+  // near the cube (or holding it) the camera moves in to examine, so you can see where your hands are
+  let c = fromArr(S.cube.c), d = Math.hypot(c.x - root.x, c.z - root.z);
+  let eT = SET.examine === 'off' ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
+  SC.exam += (eT - SC.exam) * Math.min(1, dt * 2.5);
+  if (SC.exam > 0.001) {
+    let mid = root.clone().lerp(c.clone().setY(0), 0.5), posE;
+    let lookE = mid.clone().setY(clamp(c.y - 0.1, 0.6, 1.4));
+    if (SET.examine === 'high') posE = mid.clone().addScaledVector(fwd, -0.8).addScaledVector(right, 0.45).setY(2.9);
+    else if (SET.examine === 'side') posE = mid.clone().addScaledVector(right, 2.0).addScaledVector(fwd, -0.35).setY(1.5);
+    else posE = c.clone().setY(0).addScaledVector(fwd, 1.5).addScaledVector(right, 0.35).setY(1.75);
+    let e = smooth01(SC.exam);
+    want.lerp(posE, e); look.lerp(lookE, e);
+  }
   let k = Math.min(1, dt * 5);
   SC.camPos.lerp(want, k); SC.camLook.lerp(look, k);
   cam.position.copy(SC.camPos); cam.lookAt(SC.camLook);

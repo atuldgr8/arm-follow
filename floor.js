@@ -23,6 +23,7 @@ function calSlots() {
 }
 // press once to start measuring, walk to every edge, press again to finish
 function calibrate() {
+  if (NET.role === 'host' && NET.connected) netSend({ type: 'cal', on: !CAL.active });
   if (!CAL.active) { CAL.active = true; CAL.live = null; logEvent('calibrate', { what: 'start' }); updatePanel(); return; }
   CAL.active = false;
   let r = CAL.live;
@@ -35,6 +36,7 @@ function calibrate() {
   updatePanel();
 }
 function forgetFloor() {
+  if (NET.role === 'host' && NET.connected) netSend({ type: 'calforget' });
   CAL.rect = null; CAL.active = false;
   try { localStorage.removeItem('armfollow.floor'); } catch (e) {}
   if (!isGuest()) restartWorld();

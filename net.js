@@ -56,7 +56,9 @@ function unpackPerson(m) {
   return { j, hands, chir: m.chir };
 }
 // settings P2's screen needs to draw the same world
-const NET_SETTINGS = ['own', 'ownL', 'ownR', 'tol', 'turnTol', 'lifeless', 'grip', 'holders', 'gain', 'strings', 'ghost', 'holdTime', 'turnMax', 'calUse', 'roomFit', 'edgeWarn', 'edgeDist'];
+// P1's laptop decides everything; these stay per laptop because they only make sense locally
+const NET_LOCAL = ['comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit'];
+const NET_TRACKING = ['source', 'hands', 'mpModel', 'mirror'];   // changing these restarts P2's webcam
 
 function netOn(m) {
   if (!m || typeof m !== 'object' || (NET.chan && m.from === NET.role)) return;
@@ -70,11 +72,20 @@ function netOn(m) {
   // guest: the world arrives
   if (m.type === 'snap' && NET.role === 'guest') {
     NET.snapPrev = NET.snap; NET.snap = m.s; NET.snapT = performance.now(); setOther(m.rect);
-    let changed = false;
-    for (let k of NET_SETTINGS) { if (m.set && m.set[k] !== undefined && SET[k] !== m.set[k]) { SET[k] = m.set[k]; changed = true; } }
+    let changed = false, retrack = false;
+    for (let k in (m.set || {})) {
+      if (NET_LOCAL.includes(k) || SET[k] === m.set[k]) continue;
+      SET[k] = m.set[k]; changed = true;
+      if (NET_TRACKING.includes(k)) retrack = true;
+      if (k === 'view') setView(SET.view);
+    }
+    if (retrack) setSource(SET.source);
     if (changed) updatePanel();
   }
   if (m.type === 'restart' && NET.role === 'guest') { rehome(); }
+  // the host measures both floors: its Calibrate starts and stops P2's too
+  if (m.type === 'cal' && NET.role === 'guest' && m.on !== CAL.active) calibrate();
+  if (m.type === 'calforget' && NET.role === 'guest') forgetFloor();
 }
 function netTick(now) {
   if (SET.spaces !== 2 || !NET.role) return;
@@ -85,7 +96,7 @@ function netTick(now) {
   if (now - NET.lastSend < (NET.role === 'host' ? 50 : 33)) return;
   NET.lastSend = now;
   if (NET.role === 'guest') { let me = live(2); netSend({ type: 'body', p: me ? packPerson(me) : null, rect: CAL.rect }); return; }
-  let set = {}; for (let k of NET_SETTINGS) { set[k] = SET[k]; }
+  let set = {}; for (let k in SET) { if (!NET_LOCAL.includes(k)) set[k] = SET[k]; }
   netSend({ type: 'snap', s: SNAP, set, rect: CAL.rect });
 }
 // the guest draws the host's world, eased between updates so it doesn't stutter
@@ -102,7 +113,7 @@ function guestSnap(dt) {
     A.curl += (B.curl - A.curl) * k; A.life = B.life; A.owner = B.owner; A.state = B.state;
   }
   ease(out.cube.c, s.cube.c); out.cube.yaw = s.cube.yaw; out.cube.s = s.cube.s; out.cube.held = s.cube.held; out.cube.appear = s.cube.appear;
-  out.plinth = s.plinth; out.ghost = s.ghost; out.chap = s.chap; out.hud = s.hud; out.strings = s.strings; out.yaw += (s.yaw - out.yaw) * k;
+  out.plinth = s.plinth; out.ghost = s.ghost; out.chap = s.chap; out.cam = s.cam; out.hud = s.hud; out.strings = s.strings; out.yaw += (s.yaw - out.yaw) * k;
   return out;
 }
 

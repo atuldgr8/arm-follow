@@ -166,7 +166,8 @@ function setupPanel() {
   $('areaW').oninput = e => { SET.areaW = parseFloat(e.target.value); area(); }; $('areaD').oninput = e => { SET.areaD = parseFloat(e.target.value); area(); };
   sl('gain', 'gain', v => '1 m → ' + v.toFixed(1) + ' m');
   sl('turnmax', 'turnMax', v => v >= 180 ? 'no limit' : '±' + v + '°');
-  sel('camlock', 'camLock');
+  sel('camlock', 'camLock'); sel('examine', 'examine');
+  sl('examd', 'examineDist', v => v.toFixed(1) + ' m'); tog('btn-xray', 'xray');
   $('btn-cal').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
@@ -195,11 +196,11 @@ function updatePanel() {
   set('btn-mirror', 'Mirror: ', SET.mirror);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings); set('btn-ghost', 'Ghost of P2: ', SET.ghost);
-  set('btn-edge', 'Edge warning: ', SET.edgeWarn);
+  set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '') + (CAL.rect ? '' : ' (Calibrate in the bar above)');
-  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
+  for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
   for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain']]) { $(id).value = SET[key]; }
   $('val-tol').textContent = SET.tol.toFixed(2) + ' m'; $('val-turn').textContent = SET.turnTol + '°'; $('val-gain').textContent = '1 m → ' + SET.gain.toFixed(1) + ' m';
@@ -207,12 +208,13 @@ function updatePanel() {
   cond('g-mp', cam); cond('g-split', SET.spaces === 1); cond('g-comp', cam); cond('comp-row', SET.comp !== 'off');
   cond('net-row', SET.spaces === 2); cond('g-roomfit', SET.spaces === 2);
   cond('g-gain', !(floorOn && SET.calUse !== 'cubes')); cond('g-area', !(floorOn && SET.calUse !== 'gain')); cond('g-edged', SET.edgeWarn);
-  cond('own-row', SET.own === 'custom');
+  cond('own-row', SET.own === 'custom'); cond('g-exam', SET.examine !== 'off');
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = NET.status;
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
+  // linked as P2: everything is decided on P1's laptop; P2 can only leave
   let lock = isGuest();
-  document.querySelectorAll('#panel .world').forEach(el => { el.disabled = lock; });
+  document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && el.id !== 'btn-leave'; });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
 
@@ -224,6 +226,7 @@ window.addEventListener('keydown', e => {
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
+  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscro'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();

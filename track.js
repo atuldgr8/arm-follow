@@ -50,7 +50,10 @@ const SET = {
   // ---- view ----
   view: 'behind',        // 'behind' | 'first' | 'orbit'
   camLock: 'forward',    // the view: 'forward' (never turns) | 'cube' (keeps the cube ahead) | 'turn' (turns with the body, slowly)
-  turnMax: 180,          // how far the body itself may turn, left or right (180 = no limit)
+  turnMax: 180,
+  examine: 'high',       // near the cube the camera moves in to examine: 'high' (from above) | 'side' | 'front' (looking back at you) | 'off'
+  examineDist: 1.3,      // how close to the cube (m, in the room) before it starts moving in
+  xray: true,            // near the cube the body fades so your arms and the cube show through          // how far the body itself may turn, left or right (180 = no limit)
   gain: 2,               // virtual metres per real metre
   ghost: false,          // a ring on the floor where P2 is, relative to the body
   // ---- debug ----

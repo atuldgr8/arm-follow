@@ -30,7 +30,7 @@ Switch **Source** to **Webcam (MediaPipe)** for real people. The **camera + skel
 2. On P1's laptop press **Host**: it shows a 4-letter code.
 3. On P2's laptop type the code and press **Join**.
 
-P1's laptop runs the world and every setting; P2's laptop sends its body and shows the same world (its world settings are greyed out). The view (V) and tracking settings stay per laptop.
+P1's laptop decides everything: the world, every setting, the view and the camera (P2 sees exactly P1's camera), and P2's tracking too. P1's Calibrate also starts and stops P2's floor measuring. On P2's laptop the whole panel is greyed out except **Disconnect**.
 
 To test on one computer, tick **Same computer test** and use two browser tabs.
 
@@ -100,6 +100,8 @@ Each laptop measures its own floor. Press **Calibrate floor** (or C), walk to yo
 - **Always forward** (default): the view never turns. The body can twist, the room stays put.
 - **Toward the cube:** a lock-on, like the Jaeger.
 - **Wherever the body faces:** the view turns with the body, slowly.
+
+**Near the cube, the camera** (toggle): as you get close (or while you hold it) the camera moves in to examine, like in a game: **up, looking down** (default), **to the side**, **in front, looking back at you**, or **stays put**. A slider sets how close. **See-through body** fades the torso, head and legs while it does, so your arms and the cube show through.
 
 **Body may turn up to** (a slider): past this the body stops turning. 180° = no limit. A webcam only really sees you facing it, so a big turn is usually MediaPipe swapping your left and right side when you're side-on; sudden jumps of more than 120° are now ignored, and turning always goes the short way round.
 
