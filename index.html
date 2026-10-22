@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arm Follow v1</title>
+  <script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  } }
+  </script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #15171b; color: #dde; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; overflow: hidden; }
+    #wrap { display: flex; height: 100vh; width: 100vw; }
+    #stage { flex: 1; position: relative; overflow: hidden; }
+    #stage canvas { display: block; }
+    /* ---- visitor HUD ---- */
+    #hud { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: min(360px, 70%); pointer-events: none; text-align: center; }
+    #hud .label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #c9ced6; margin-bottom: 6px; transition: color 0.2s; }
+    .meter { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); overflow: hidden; }
+    .meter.thin { height: 5px; margin-top: 5px; }
+    .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #d9dcdf; transition: background 0.2s; }
+    .meter .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: rgba(255,255,255,0.55); }
+    .meter .zone { position: absolute; left: 0; top: 0; bottom: 0; width: 60%; background: rgba(120,230,160,0.0); transition: background 0.3s; }
+    #score { position: absolute; top: 16px; right: 20px; font-size: 13px; letter-spacing: 3px; color: #e6e9ee; pointer-events: none; transition: transform 0.2s; }
+    #hold { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); width: 200px; pointer-events: none; opacity: 0; transition: opacity 0.2s; text-align: center; font-size: 11px; letter-spacing: 3px; color: #e6be6a; }
+    #hold .meter .fill { background: #e6be6a; }
+    #waiting { position: absolute; top: 46%; width: 100%; text-align: center; font-size: 15px; color: #9aa3ad; pointer-events: none; }
+    #stats { position: absolute; left: 10px; bottom: 10px; font: 11px/1.45 monospace; color: #a0ffbe; background: rgba(0,0,0,0.62); padding: 8px 10px; border-radius: 4px; white-space: pre; pointer-events: none; max-width: calc(100% - 40px); overflow: hidden; }
+    #pip { position: absolute; right: 12px; bottom: 12px; pointer-events: none; display: none; border-radius: 4px; }
+    #edge { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 4px; background: rgba(110,200,255,0.18); border: 1px solid rgba(110,200,255,0.6); color: #bfe6ff; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; pointer-events: none; display: none; }
+    #calib { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(8,10,14,0.55); pointer-events: none; text-align: center; }
+    #calib .big { font-size: 26px; letter-spacing: 6px; color: #fff; } #calib .small { font-size: 14px; color: #bfe6ff; margin-top: 12px; line-height: 1.7; }
+    #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+    /* ---- Atul's panel ---- */
+    #panel { width: 300px; min-width: 300px; height: 100vh; overflow-y: auto; background: #0b0d10; border-left: 1px solid #1d2329; padding: 14px 14px 30px; box-sizing: border-box; font-size: 11px; }
+    #panel h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #fff; }
+    #panel details { border-top: 1px solid #1d2329; padding: 8px 0 4px; }
+    #panel summary { cursor: pointer; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #8ab4dc; list-style: none; user-select: none; }
+    #panel summary::before { content: '▸ '; } #panel details[open] summary::before { content: '▾ '; }
+    #panel h5 { margin: 12px 0 2px; font-size: 10px; color: #b8c3cf; font-weight: normal; letter-spacing: 1px; text-transform: uppercase; }
+    #panel label { display: block; color: #889; text-transform: uppercase; font-size: 10px; margin: 8px 0 4px; }
+    #panel .val { float: right; color: #667; text-transform: none; }
+    #panel select, #panel input[type=text] { width: 100%; background: #14181d; color: #dde; border: 1px solid #2a3038; padding: 5px; border-radius: 3px; font-size: 11px; box-sizing: border-box; }
+    #panel input[type=range] { width: 100%; }
+    #panel button { background: #14181d; color: #bcc; border: 1px solid #2a3038; padding: 5px 8px; border-radius: 3px; font-size: 10px; text-transform: uppercase; cursor: pointer; margin: 6px 4px 0 0; }
+    #panel button.on { background: #1f5f8b; color: #fff; border-color: #3b8cc4; }
+    #panel button:disabled, #panel select:disabled, #panel input:disabled { opacity: 0.35; cursor: not-allowed; }
+    #panel .note { color: #667; font-size: 10px; margin-top: 5px; line-height: 1.5; }
+    #panel .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; align-items: center; margin-top: 6px; }
+    #panel .row2 label { margin: 0; }
+    #net-status { color: #8ab4dc; margin: 6px 0; }
+    .locked-note { display: none; color: #8ab4dc; font-size: 10px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <div id="hud">
+        <div class="label" id="hud-label">together</div>
+        <div class="meter" id="m-drift"><div class="zone"></div><div class="fill"></div><div class="mark" style="left:60%"></div><div class="mark" style="left:calc(100% / 1.4)"></div></div>
+        <div class="meter thin" id="m-turn"><div class="fill"></div><div class="mark" style="left:calc(100% / 1.4)"></div></div>
+      </div>
+      <div id="score">CUBES 0</div>
+      <div id="hold"><div style="margin-bottom:6px">HOLD</div><div class="meter"><div class="fill"></div></div></div>
+      <div id="waiting"></div>
+      <div id="edge"></div>
+      <div id="calib"><div class="big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div></div>
+      <canvas id="pip"></canvas>
+      <div id="stats"></div>
+      <div id="toast"></div>
+    </div>
+
+    <div id="panel">
+      <h3>Arm Follow v1 · control panel</h3>
+
+      <details open><summary>Tracking</summary>
+        <label>Source</label>
+        <select id="src"><option value="demo">Demo people (nobody needed)</option><option value="mediapipe">Webcam (MediaPipe)</option></select>
+        <div id="mp-row">
+          <label>Camera</label><select id="cam"></select>
+          <label>Hand tracking</label>
+          <select id="hands"><option value="pose">Body model only (4 points per hand)</option><option value="hand">Add the hand model (21 points per hand)</option></select>
+          <div class="note">The hand model sees which way the palm faces and how open the hand is, but may drop out at 2–3 m. Compare the two here.</div>
+          <label>Finding two people (1 space)</label>
+          <select id="mpsplit"><option value="1">Split the picture: one person per half (steadier)</option><option value="0">Both in one picture</option></select>
+          <label>Body model</label>
+          <select id="mpmodel"><option value="lite">Lite (fast)</option><option value="full">Full (steadier, slower)</option></select>
+          <label>Webcam field of view <span class="val" id="val-fov"></span></label><input type="range" id="fov" min="40" max="110" step="1">
+        </div>
+        <label>Feel: responsive ⟷ smooth <span class="val" id="val-feel"></span></label><input type="range" id="feel" min="0" max="1" step="0.05">
+        <button id="btn-mirror"></button><button id="btn-solo"></button>
+        <label>Computer partner (testing alone with the webcam)</label>
+        <select id="comp"><option value="off">Off</option><option value="P2">Computer plays P2 (you own the body)</option><option value="P1">Computer plays P1 (you are the arm)</option></select>
+        <div id="comp-row">
+          <label>It reacts after <span class="val" id="val-cdelay"></span></label><input type="range" id="cdelay" min="0" max="1" step="0.05">
+          <label>Its top walking speed <span class="val" id="val-cspeed"></span></label><input type="range" id="cspeed" min="0.2" max="1.5" step="0.05">
+          <div class="note">As P2 it walks after you no faster than this, so walking briskly leaves the arm behind. Its arms copy yours, late.</div>
+        </div>
+      </details>
+
+      <details open><summary>Spaces</summary>
+        <select id="spaces"><option value="2">2 spaces: one person per laptop (main)</option><option value="1">1 space: both in one camera</option></select>
+        <div id="net-row">
+          <button id="btn-host">Host (this is P1)</button>
+          <label>Or join with the host's code</label>
+          <div style="display:flex; gap:5px;"><input type="text" id="net-code" maxlength="4" placeholder="CODE" style="flex:1; text-transform:uppercase;"><button id="btn-join" style="margin:0">Join (P2)</button></div>
+          <label style="display:flex; align-items:center; gap:6px; text-transform:none;"><input type="checkbox" id="net-local" style="width:auto; margin:0;"> Same computer test (two tabs)</label>
+          <div id="net-status">offline</div>
+          <button id="btn-leave">Disconnect</button>
+        </div>
+      </details>
+
+      <details open><summary>Floor</summary>
+        <button id="btn-cal">Calibrate floor (C)</button><button id="btn-calclear">Forget floor</button>
+        <div class="note" id="cal-status"></div>
+        <label>The measured floor sets</label>
+        <select id="caluse" class="world"><option value="both">The walk gain + where cubes appear</option><option value="gain">Only the walk gain</option><option value="cubes">Only where cubes appear</option></select>
+        <label>Rooms of different sizes (2 spaces)</label>
+        <select id="roomfit" class="world"><option value="mapped">Map each room onto the other</option><option value="smaller">Both use the smaller room</option></select>
+        <button id="btn-edge" class="world"></button>
+        <label>Warn this close to an edge <span class="val" id="val-edged"></span></label><input type="range" id="edged" class="world" min="0.1" max="0.8" step="0.05">
+        <div class="note">Each laptop measures its own floor: press Calibrate, walk to your front, back, left and right edges, press it again. It's remembered on this laptop.</div>
+      </details>
+
+      <details open><summary>Who owns what</summary>
+        <label>P2 possesses</label>
+        <select id="own" class="world"><option value="R">The right arm</option><option value="L">The left arm</option><option value="both">Both arms</option><option value="custom">Custom, arm by arm</option></select>
+        <div class="row2" id="own-row"><label>Left arm</label><select id="ownL" class="world"><option value="1">P1</option><option value="2">P2</option></select><label>Right arm</label><select id="ownR" class="world"><option value="1">P1</option><option value="2">P2</option></select></div>
+        <div class="note">Legs and torso stay P1's. Each person uses their own arm on the same side.</div>
+        <div class="locked-note">Linked as P2: the host sets these.</div>
+      </details>
+
+      <details open><summary>Follow rule</summary>
+        <label>Drift tolerance <span class="val" id="val-tol"></span></label><input type="range" id="tol" class="world" min="0.1" max="1.5" step="0.05">
+        <label>Turning tolerance <span class="val" id="val-turn"></span></label><input type="range" id="turn" class="world" min="10" max="120" step="5">
+        <div class="note">The arm is left behind above either one, and comes back under 60% of both.</div>
+        <h5>When it's left behind</h5>
+        <select id="lifeless" class="world"><option value="fall">Falls off and lies on the floor</option><option value="limp">Hangs limp on the shoulder</option></select>
+        <button id="btn-puppet" class="world"></button><button id="btn-curl" class="world"></button><button id="btn-lyingf" class="world"></button><button id="btn-twitch" class="world"></button>
+        <label>Lying arm follows P2 this late <span class="val" id="val-lag"></span></label><input type="range" id="lag" class="world" min="0" max="1.5" step="0.05">
+        <label>…and this strongly <span class="val" id="val-lstr"></span></label><input type="range" id="lstr" class="world" min="0" max="1" step="0.05">
+        <h5>Coming back</h5>
+        <select id="rstyle" class="world"><option value="strings">Pulled up on invisible strings (jerky, dangling)</option><option value="glide">Glides back (smooth, mechanical)</option></select>
+        <label>Strings take <span class="val" id="val-rtime"></span></label><input type="range" id="rtime" class="world" min="0.5" max="3" step="0.1">
+        <button id="btn-over" class="world"></button><button id="btn-strings" class="world"></button>
+        <div class="locked-note">Linked as P2: the host sets these.</div>
+      </details>
+
+      <details open><summary>Picking up</summary>
+        <label>Grip</label>
+        <select id="grip" class="world"><option value="squeeze">Squeeze to hold (slips if you ease off)</option><option value="palm">Palms facing = grip</option><option value="touch">Just touching (no gesture)</option><option value="dwell">Dwell 0.5 s (fallback)</option></select>
+        <label>Which hands can hold</label>
+        <select id="holders" class="world"><option value="any">Any hand</option><option value="possessed">Only possessed hands</option></select>
+        <div class="note" id="holders-note"></div>
+        <label>Touching distance <span class="val" id="val-touch"></span></label><input type="range" id="touch" class="world" min="0.03" max="0.2" step="0.01">
+        <label>Hold above the waist for <span class="val" id="val-hold"></span></label><input type="range" id="hold-t" class="world" min="0.5" max="5" step="0.5">
+        <label>New cubes appear within (real floor) <span class="val" id="val-area"></span></label>
+        <div class="row2"><input type="range" id="areaW" class="world" min="0.6" max="3" step="0.1"><input type="range" id="areaD" class="world" min="0.6" max="3" step="0.1"></div>
+        <div class="note">v1 has the big two-hand cube only. Palms moving apart lets go in every grip.</div>
+        <div class="locked-note">Linked as P2: the host sets these.</div>
+      </details>
+
+      <details open><summary>View</summary>
+        <label>View (V)</label>
+        <select id="view"><option value="behind">Behind the body (over the shoulder)</option><option value="first">First person (VR preview)</option><option value="orbit">Free orbit (drag)</option></select>
+        <label>The view faces</label>
+        <select id="camlock"><option value="forward">Always forward (never turns)</option><option value="cube">Toward the cube (lock-on)</option><option value="turn">Wherever the body faces (slowly)</option></select>
+        <label>Body may turn up to <span class="val" id="val-turnmax"></span></label><input type="range" id="turnmax" class="world" min="10" max="180" step="5">
+        <div class="note">Past this the body stops turning (180° = no limit).</div>
+        <label>Walk gain <span class="val" id="val-gain"></span></label><input type="range" id="gain" class="world" min="1" max="3" step="0.1">
+        <button id="btn-ghost" class="world"></button>
+        <div class="note">Ghost: a ring on the floor showing where P2 is, compared to the body.</div>
+      </details>
+
+      <details><summary>Debug</summary>
+        <button id="btn-hud"></button><button id="btn-pip"></button>
+        <div><button id="btn-restart">Restart (R)</button><button id="btn-log">Save log (O)</button></div>
+        <div class="note">Keys: H panel · J camera + skeletons · V view · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen</div>
+      </details>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    window.THREE = THREE; window.OrbitControls = OrbitControls;
+    // MediaPipe loads on the side, so the room works even without it
+    import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs')
+      .then(m => { window.FilesetResolver = m.FilesetResolver; window.PoseLandmarker = m.PoseLandmarker; window.HandLandmarker = m.HandLandmarker; window.mediaPipeLoaded = true; })
+      .catch(e => { window.mediaPipeError = String(e && e.message || e); });
+    // the rest is plain scripts (so it also runs by opening index.html)
+    for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
+      await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f; s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
+    }
+  </script>
+</body>
+</html>
