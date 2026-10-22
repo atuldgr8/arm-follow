@@ -6,7 +6,9 @@
 // Kept to plain parts (room, body, objects) so it can move to VR later.
 // ============================================================
 
-const COL = { body: 0xd9dcdf, p2: 0xff9a4a, dead: 0x6a6e74, cube: 0xe6be6a, plinth: 0x3b4048, floor: 0x2a2d33, wall: 0x24272c, bg: 0x15171b };
+// a Barragán-ish courtyard: plaster walls in loud colours, a pale stone floor, open sky
+const COL = { body: 0xfbfaf7, p2: 0xff5a1f, dead: 0x8c8577, cube: 0x2f5bff, plinth: 0xf7f3ec, floor: 0xe9dcc8, bg: 0xa9d8f2,
+  wallBack: 0xee5a93, wallBack2: 0xff9a4d, wallL: 0x9d7be0, wallR: 0xf6c343 };
 const SC = { exam: 0, renderer: null, scene: null, camera: null, controls: null, view: null, camPos: new V3(0, 1.8, 3), camLook: new V3(0, 1, 0), camYaw: 0, parts: {}, shown: null };
 
 function sceneInit(container) {
@@ -16,14 +18,14 @@ function sceneInit(container) {
   container.appendChild(renderer.domElement);
   let scene = SC.scene = new THREE.Scene();
   scene.background = new THREE.Color(COL.bg);
-  scene.fog = new THREE.Fog(COL.bg, 9, 18);
+  scene.fog = new THREE.Fog(COL.bg, 14, 34);
   SC.camera = new THREE.PerspectiveCamera(55, 1, 0.04, 60);
   SC.controls = new OrbitControls(SC.camera, renderer.domElement);
   SC.controls.enableDamping = true; SC.controls.enabled = false; SC.controls.maxPolarAngle = Math.PI * 0.495;
 
-  scene.add(new THREE.HemisphereLight(0xe4ebf2, 0x2c3036, 0.9));
-  let sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(2.5, 6, 3); sun.castShadow = true;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xe9d9c2, 1.25));
+  let sun = new THREE.DirectionalLight(0xfff1dc, 1.9);
+  sun.position.set(4, 6.5, 6.5); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 0.5, far: 20 });
   sun.shadow.bias = -0.0005;
@@ -33,26 +35,32 @@ function sceneInit(container) {
   let mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 });
   let floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.x * 2, ROOM.zFront - ROOM.zBack), mat(COL.floor));
   floor.rotation.x = -Math.PI / 2; floor.position.z = (ROOM.zFront + ROOM.zBack) / 2; floor.receiveShadow = true; scene.add(floor);
-  let grid = new THREE.GridHelper(9, 18, 0x3d424a, 0x33373e); grid.position.y = 0.002; scene.add(grid);
-  let wallH = 2.8, wm = mat(COL.wall);
-  let back = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.x * 2, wallH), wm); back.position.set(0, wallH / 2, ROOM.zBack); back.receiveShadow = true; scene.add(back);
-  for (let s of [-1, 1]) {
-    let w = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.zFront - ROOM.zBack, wallH), wm);
-    w.rotation.y = -s * Math.PI / 2; w.position.set(s * ROOM.x, wallH / 2, (ROOM.zFront + ROOM.zBack) / 2); w.receiveShadow = true; scene.add(w);
-  }
-  let startRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.31, 40), new THREE.MeshBasicMaterial({ color: 0x5b626c }));
+  // the ground beyond the courtyard, fading into the sky
+  let ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), mat(0xdcc9ab)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; ground.receiveShadow = true; scene.add(ground);
+  // stone floor laid in big slabs (thin joints, like a Mies plinth)
+  let grid = new THREE.GridHelper(9, 9, 0xd6c4a8, 0xd6c4a8); grid.position.y = 0.002; scene.add(grid);
+  // plaster walls: pink at the back with an orange plane overlapping it, lilac on the left, yellow on the right
+  // plaster glows a little in sunlight, so the colours stay loud even in shade
+  let plaster = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, emissive: c, emissiveIntensity: 0.28 });
+  let wall = (w, h, c, x, z, ry) => { let m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), plaster(c)); m.position.set(x, h / 2, z); m.rotation.y = ry || 0; m.receiveShadow = true; m.castShadow = true; scene.add(m); return m; };
+  wall(ROOM.x * 2, 3.6, COL.wallBack, 0, ROOM.zBack - 0.06);
+  wall(3.2, 4.4, COL.wallBack2, ROOM.x - 1.3, ROOM.zBack + 0.08);
+  let depth = ROOM.zFront - ROOM.zBack, mid = (ROOM.zFront + ROOM.zBack) / 2;
+  wall(depth, 2.6, COL.wallL, -ROOM.x - 0.06, mid, Math.PI / 2);
+  wall(depth * 0.7, 3.1, COL.wallR, ROOM.x + 0.06, ROOM.zBack + depth * 0.35, Math.PI / 2);
+  let startRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.31, 40), new THREE.MeshBasicMaterial({ color: 0xcdb896 }));
   startRing.rotation.x = -Math.PI / 2; startRing.position.set(START.x, 0.004, START.z); scene.add(startRing);
 
   // ---- plinth and cube ----
   let plinth = SC.parts.plinth = new THREE.Mesh(new THREE.BoxGeometry(PLINTH.w, PLINTH.h, PLINTH.w), mat(COL.plinth));
   plinth.castShadow = true; plinth.receiveShadow = true; scene.add(plinth);
-  let cube = SC.parts.cube = new THREE.Mesh(new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE), new THREE.MeshStandardMaterial({ color: COL.cube, roughness: 0.6, emissive: 0x000000 }));
+  let cube = SC.parts.cube = new THREE.Mesh(new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE), new THREE.MeshStandardMaterial({ color: COL.cube, roughness: 0.7, emissive: 0x000000 }));
   cube.castShadow = true; cube.receiveShadow = true;
-  cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cube.geometry), new THREE.LineBasicMaterial({ color: 0x8a6a2a })));
+  cube.add(new THREE.LineSegments(new THREE.EdgesGeometry(cube.geometry), new THREE.LineBasicMaterial({ color: 0x1a36b8 })));
   scene.add(cube);
 
   // ---- the mannequin ----
-  SC.parts.bodyMat = new THREE.MeshStandardMaterial({ color: COL.body, roughness: 0.55 });
+  SC.parts.bodyMat = new THREE.MeshStandardMaterial({ color: COL.body, roughness: 0.75 });
   let B = SC.parts.body = new THREE.Group(); scene.add(B);
   let mk = (geo, m) => { let o = new THREE.Mesh(geo, m || SC.parts.bodyMat); o.castShadow = true; o.receiveShadow = true; B.add(o); return o; };
   SC.parts.cyl = new THREE.CylinderGeometry(1, 1, 1, 14);
@@ -76,7 +84,7 @@ function sceneInit(container) {
   }
   // puppet strings: thin lines from the arm upward
   let sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(4 * 2 * 3 * 2), 3));
-  SC.parts.strings = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: 0xd8dde3, transparent: true, opacity: 0.55 }));
+  SC.parts.strings = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: 0x141414, transparent: true, opacity: 0.45 }));
   SC.parts.strings.frustumCulled = false; scene.add(SC.parts.strings);
   // P2's place, relative to the body (optional)
   let gr = SC.parts.ghost = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.22, 36), new THREE.MeshBasicMaterial({ color: COL.p2, transparent: true, opacity: 0.6 }));
@@ -87,14 +95,14 @@ function sceneInit(container) {
   SC.parts.chapTex = new THREE.CanvasTexture(cv);
   SC.parts.chap = [0, 1, 2, 3].map(() => {
     let t = SC.parts.chapTex.clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true;
-    let m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: t, color: 0x7fd3ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    let m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: t, color: 0x2f5bff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
     m.visible = false; scene.add(m); return m;
   });
   let og = new THREE.BufferGeometry().setFromPoints([new V3(), new V3(), new V3(), new V3(), new V3()]);
-  SC.parts.outline = new THREE.Line(og, new THREE.LineBasicMaterial({ color: 0x5aa9d6, transparent: true, opacity: 0.5 }));
+  SC.parts.outline = new THREE.Line(og, new THREE.LineBasicMaterial({ color: 0x2f5bff, transparent: true, opacity: 0.6 }));
   SC.parts.outline.visible = false; scene.add(SC.parts.outline);
   // the walk to the centre: a ring on the floor, and a marker for where P2 is
-  SC.parts.ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 48), new THREE.MeshBasicMaterial({ color: 0x30d158, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  SC.parts.ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 48), new THREE.MeshBasicMaterial({ color: 0x12a150, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   SC.parts.ring.rotation.x = -Math.PI / 2; SC.parts.ring.visible = false; scene.add(SC.parts.ring);
   SC.parts.p2dot = new THREE.Mesh(new THREE.CircleGeometry(0.16, 32), new THREE.MeshBasicMaterial({ color: COL.p2, transparent: true, opacity: 0.9 }));
   SC.parts.p2dot.rotation.x = -Math.PI / 2; SC.parts.p2dot.visible = false; scene.add(SC.parts.p2dot);
@@ -188,7 +196,7 @@ function sceneRender(S, dt) {
   if (ce) {
     let pulse = 1 + 0.06 * Math.sin(performance.now() / 250);
     P2.ring.position.set(ce.ring[0], 0.01, ce.ring[1]); P2.ring.scale.setScalar(pulse);
-    P2.ring.material.color.setHex(ce.ok1 && ce.ok2 ? 0x30d158 : 0x7fe89a);
+    P2.ring.material.color.setHex(ce.ok1 && ce.ok2 ? 0x12a150 : 0x5fe0b0);
     if (ce.p2) P2.p2dot.position.set(ce.p2[0], 0.015, ce.p2[1]);
   }
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid

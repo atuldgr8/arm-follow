@@ -17,12 +17,12 @@ function hudStep(S) {
   $('waiting').textContent = wait;
   let k = clamp(h.drift / h.tol / METER_MAX, 0, 1), kt = clamp(h.turn / h.turnTol / METER_MAX, 0, 1);
   let apart = h.state === 'apart', back = h.state === 'returning';
-  let col = apart ? '#ff6a5a' : k > 0.6 / METER_MAX ? '#f2b84b' : '#d9dcdf';
+  let col = apart ? '#E5372A' : k > 0.6 / METER_MAX ? '#FFB020' : '#141414';
   let f = $('m-drift').querySelector('.fill'); f.style.width = (k * 100) + '%'; f.style.background = col;
-  $('m-drift').querySelector('.zone').style.background = apart ? 'rgba(120,230,160,0.22)' : 'rgba(120,230,160,0)';
-  let ft = $('m-turn').querySelector('.fill'); ft.style.width = (kt * 100) + '%'; ft.style.background = h.turn > h.turnTol ? '#ff6a5a' : '#9aa3ad';
+  $('m-drift').querySelector('.zone').style.background = apart ? 'rgba(95,224,176,0.55)' : 'rgba(95,224,176,0)';
+  let ft = $('m-turn').querySelector('.fill'); ft.style.width = (kt * 100) + '%'; ft.style.background = h.turn > h.turnTol ? '#E5372A' : '#141414';
   $('hud-label').textContent = apart ? 'arm left behind · catch up' : back ? 'coming back' : h.state === 'vacant' ? 'nobody in the arm' : 'together';
-  $('hud-label').style.color = apart ? '#ff8a7a' : '#c9ced6';
+  $('hud-label').style.color = apart ? '#E5372A' : '#141414';
   $('score').textContent = 'CUBES ' + h.score;
   if (h.score !== lastScore) { lastScore = h.score; $('score').style.transform = 'scale(1.35)'; setTimeout(() => { $('score').style.transform = ''; }, 260); }
   $('hold').style.opacity = h.hold > 0.01 ? 1 : 0;
