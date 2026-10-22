@@ -1,5 +1,7 @@
 # Arm Follow v1
 
+hi!
+
 One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both). If P2 doesn't walk along with P1, the arm is left behind: it falls off like a marionette with its strings cut, lies on the floor still twitching along with P2, and can't hold anything. When P2 catches up, invisible strings haul it back and it snaps into the shoulder. The task: walk to a cube and lift it with both hands.
 
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
