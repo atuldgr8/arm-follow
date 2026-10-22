@@ -66,10 +66,10 @@ function netOn(m) {
   if (m.type === 'pong') { let r = performance.now() - m.t; NET.rtt = NET.rtt ? NET.rtt * 0.7 + r * 0.3 : r; return; }
   NET.lastRecv = performance.now();
   // host: P2's body arrives (already smoothed on P2's laptop)
-  if (m.type === 'body' && NET.role === 'host') { if (m.p) setPerson(2, 'net', unpackPerson(m.p), performance.now(), false); CAL.other = m.rect || null; }
+  if (m.type === 'body' && NET.role === 'host') { if (m.p) setPerson(2, 'net', unpackPerson(m.p), performance.now(), false); setOther(m.rect); }
   // guest: the world arrives
   if (m.type === 'snap' && NET.role === 'guest') {
-    NET.snapPrev = NET.snap; NET.snap = m.s; NET.snapT = performance.now(); CAL.other = m.rect || null;
+    NET.snapPrev = NET.snap; NET.snap = m.s; NET.snapT = performance.now(); setOther(m.rect);
     let changed = false;
     for (let k of NET_SETTINGS) { if (m.set && m.set[k] !== undefined && SET[k] !== m.set[k]) { SET[k] = m.set[k]; changed = true; } }
     if (changed) updatePanel();
@@ -105,3 +105,6 @@ function guestSnap(dt) {
   out.plinth = s.plinth; out.ghost = s.ghost; out.chap = s.chap; out.hud = s.hud; out.strings = s.strings; out.yaw += (s.yaw - out.yaw) * k;
   return out;
 }
+
+// the other laptop's measured floor (the panel shows it when it changes)
+function setOther(r) { r = r || null; if (JSON.stringify(r) !== JSON.stringify(CAL.other)) { CAL.other = r; updatePanel(); } }

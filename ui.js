@@ -170,7 +170,12 @@ function setupPanel() {
   $('btn-cal').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
-  $('btn-restart').onclick = restartAll; $('btn-log').onclick = saveLog;
+  $('btn-restart').onclick = restartAll; $('btn-log').onclick = saveLog; $('btn-viewq').onclick = () => { cycleView(); updatePanel(); };
+  // the panel remembers which sections you left open
+  document.querySelectorAll('#panel details[data-key]').forEach(d => {
+    try { let v = localStorage.getItem('armfollow.panel.' + d.dataset.key); if (v !== null) d.open = v === '1'; } catch (e) {}
+    d.addEventListener('toggle', () => { try { localStorage.setItem('armfollow.panel.' + d.dataset.key, d.open ? '1' : '0'); } catch (e) {} });
+  });
   // drift meter marks: comes back under 60%, left behind at 100%
   let m = $('m-drift').querySelectorAll('.mark');
   m[0].style.left = (0.6 / METER_MAX * 100) + '%'; m[1].style.left = (1 / METER_MAX * 100) + '%';
@@ -181,31 +186,37 @@ function setupPanel() {
 function updatePanel() {
   if (!$('src')) return;
   let set = (id, label, on) => { let b = $(id); if (!b) return; b.textContent = label + (on ? 'On' : 'Off'); b.classList.toggle('on', !!on); };
-  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-solo', 'Solo test (S): ', SET.solo);
+  let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
+  // a group that doesn't apply right now folds into one greyed line saying why
+  let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
+  quick('btn-pip', SET.pip); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
+  $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
+  $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
+  set('btn-mirror', 'Mirror: ', SET.mirror);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings); set('btn-ghost', 'Ghost of P2: ', SET.ghost);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn);
-  $('btn-cal').textContent = CAL.active ? 'Done measuring (C)' : 'Calibrate floor (C)'; $('btn-cal').classList.toggle('on', CAL.active);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
-    (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain set to ' + effGain().toFixed(1) : '');
-  $('gain').disabled = isGuest() || (!!usable(1) && SET.calUse !== 'cubes');
-  set('btn-hud', 'Stats (D): ', SET.hud); set('btn-pip', 'Camera + skeletons (J): ', SET.pip);
+    (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '') + (CAL.rect ? '' : ' (Calibrate in the bar above)');
   for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
   for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain']]) { $(id).value = SET[key]; }
   $('val-tol').textContent = SET.tol.toFixed(2) + ' m'; $('val-turn').textContent = SET.turnTol + '°'; $('val-gain').textContent = '1 m → ' + SET.gain.toFixed(1) + ' m';
-  $('mp-row').style.display = SET.source === 'mediapipe' ? 'block' : 'none';
-  $('comp-row').style.display = SET.comp !== 'off' ? 'block' : 'none';
-  $('net-row').style.display = SET.spaces === 2 ? 'block' : 'none';
+  let cam = SET.source === 'mediapipe', floorOn = !!usable(1);
+  cond('g-mp', cam); cond('g-split', SET.spaces === 1); cond('g-comp', cam); cond('comp-row', SET.comp !== 'off');
+  cond('net-row', SET.spaces === 2); cond('g-roomfit', SET.spaces === 2);
+  cond('g-gain', !(floorOn && SET.calUse !== 'cubes')); cond('g-area', !(floorOn && SET.calUse !== 'gain')); cond('g-edged', SET.edgeWarn);
+  cond('own-row', SET.own === 'custom');
+  cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = NET.status;
-  $('own-row').style.display = SET.own === 'custom' ? 'grid' : 'none';
-  let possessedCount = p2Arms().length;
-  $('holders-note').textContent = SET.holders === 'possessed' && possessedCount < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
+  $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   let lock = isGuest();
   document.querySelectorAll('#panel .world').forEach(el => { el.disabled = lock; });
-  document.querySelectorAll('#panel .locked-note').forEach(el => { el.style.display = lock ? 'block' : 'none'; });
+  $('lock-all').style.display = lock ? 'block' : 'none';
 }
+
+function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
 
 // ---------------- keys ----------------
 window.addEventListener('keydown', e => {
@@ -215,7 +226,7 @@ window.addEventListener('keydown', e => {
   let k = (e.key || '').toLowerCase();
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
-  else if (k === 'v') { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
+  else if (k === 'v') cycleView();
   else if (k === 'r') restartAll();
   else if (k === 'c') calibrate();
   else if (k === 's') { SET.solo = !SET.solo; toast('Solo ' + (SET.solo ? 'on: you are P1 and P2' : 'off')); }

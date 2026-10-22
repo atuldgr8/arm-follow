@@ -103,6 +103,10 @@ Each laptop measures its own floor. Press **Calibrate floor** (or C), walk to yo
 
 **Body may turn up to** (a slider): past this the body stops turning. 180° = no limit. A webcam only really sees you facing it, so a big turn is usually MediaPipe swapping your left and right side when you're side-on; sudden jumps of more than 120° are now ignored, and turning always goes the short way round.
 
+## The panel
+
+A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Explanations are in the ⓘ tooltips. The panel remembers which sections you left open.
+
 ## Keys
 
 H panel · J camera + skeletons · V view · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen
