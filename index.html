@@ -33,6 +33,13 @@
     #edge { position: absolute; top: 108px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 4px; background: rgba(110,200,255,0.18); border: 1px solid rgba(110,200,255,0.6); color: #bfe6ff; font-size: 12px; letter-spacing: 3px; text-transform: uppercase; pointer-events: none; display: none; }
     #calib { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(8,10,14,0.55); pointer-events: none; text-align: center; }
     #calib .big { font-size: 26px; letter-spacing: 6px; color: #fff; } #calib .small { font-size: 14px; color: #bfe6ff; margin-top: 12px; line-height: 1.7; }
+    #ready { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(560px, 92%); background: rgba(10,13,17,0.92); border: 1px solid #2b3540; border-radius: 8px; padding: 14px 18px 16px; font-size: 13px; line-height: 1.55; color: #cfd6de; display: none; z-index: 4; }
+    #ready .title { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #8ab4dc; margin-bottom: 8px; }
+    #ready .step { margin-bottom: 10px; } #ready .opt { color: #6f7b88; font-size: 11px; }
+    #ready button { background: #14181d; color: #dde; border: 1px solid #3a4652; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+    #ready #btn-start { display: block; width: 100%; margin-top: 4px; padding: 10px; font-size: 16px; letter-spacing: 6px; background: #1f5f8b; border-color: #3b8cc4; color: #fff; }
+    #ready #btn-start:disabled { opacity: 0.4; cursor: not-allowed; }
+    #ready-floor { color: #8ab4dc; font-size: 12px; } #ready-guest { display: none; text-align: center; color: #8ab4dc; margin-top: 6px; }
     #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     /* ---- Atul's panel ---- */
     #panel { width: 300px; min-width: 300px; height: 100vh; overflow-y: auto; background: #0b0d10; border-left: 1px solid #1d2329; padding: 14px 14px 30px; box-sizing: border-box; font-size: 11px; }
@@ -75,6 +82,13 @@
       <div id="hold"><div style="margin-bottom:6px">HOLD</div><div class="meter"><div class="fill"></div></div></div>
       <div id="waiting"></div>
       <div id="edge"></div>
+      <div id="ready">
+        <div class="title">Before you start</div>
+        <div class="step"><b>1 · Measure your floor</b> <span class="opt">(optional)</span><br>Press <button id="btn-cal2">Calibrate floor</button>, walk to the front, back, left and right edges of the space you can use, then press it again. The room then fits your floor. Skip it and the walk-gain sliders are used.<div id="ready-floor"></div></div>
+        <div class="step"><b>2 · Step into the camera</b><br><span id="ready-who"></span></div>
+        <button id="btn-start">START</button>
+        <div id="ready-guest">Waiting for P1 to press START…</div>
+      </div>
       <div id="calib"><div class="big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div></div>
       <canvas id="pip"></canvas>
       <div id="stats"></div>
@@ -84,7 +98,7 @@
     <div id="panel">
       <h3>Arm Follow · control panel</h3>
       <div id="quick">
-        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera <kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats <kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View <kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo <kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate <kbd>C</kbd></button><button id="btn-restart">Restart <kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log <kbd>O</kbd></button>
+        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera <kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats <kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View <kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo <kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate <kbd>C</kbd></button><button id="btn-setup" title="Back to the start card: measure the floor again, or choose who is followed again">Setup</button><button id="btn-restart">Restart <kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log <kbd>O</kbd></button>
       </div>
 
       <details data-key="tracking" open><summary>Tracking</summary>
@@ -127,7 +141,9 @@
 
       <details data-key="floor"><summary>Floor</summary>
         <div class="note" id="cal-status"></div>
-        <button id="btn-calclear">Forget floor</button>
+        <button id="btn-cal3">Calibrate floor</button><button id="btn-calclear">Forget floor</button>
+        <label>New cubes appear</label>
+        <select id="spawnlr" class="world"><option value="1">Mostly left and right (the other side from you)</option><option value="0">Anywhere you can reach</option></select>
         <label>The measured floor sets <span class="tip" title="Walk gain: your floor stretches to fill the room (up to 4×). Where cubes appear: always somewhere you can reach, the first at your far edge.">ⓘ</span></label>
         <select id="caluse" class="world"><option value="both">The walk gain + where cubes appear</option><option value="gain">Only the walk gain</option><option value="cubes">Only where cubes appear</option></select>
         <div class="cond" id="g-roomfit" data-why="Rooms of different sizes · 2 spaces only">

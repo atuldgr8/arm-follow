@@ -24,6 +24,15 @@ It starts in **Demo people**: two made-up people who play the whole loop by them
 
 Switch **Source** to **Webcam (MediaPipe)** for real people. The **camera + skeletons** view (J) is on from the start: the live picture with the tracked points drawn on it, so you can see what the tracker sees.
 
+## Starting (webcam)
+
+With the webcam, a **Before you start** card shows at the bottom of the screen:
+1. **Measure your floor** (optional): press **Calibrate floor**, walk to the front, back, left and right edges of the space you can use, press it again. The room then fits your floor (see Floor below). It's remembered on that laptop.
+2. **Step into the camera.** The biggest person in the picture is followed (in 1 space the two biggest, P1 on screen left). The camera view (J) labels who's who.
+3. **START** locks onto those people: anyone else walking through the picture is ignored from then on. If the followed person leaves for more than 1.5 s, it looks a bit wider for them.
+
+**Setup** (in the quick bar) brings the card back, to measure again or re-pick who's followed. In 2 spaces P1's START and Setup work on both laptops. The demo people need no card.
+
 ## 2 spaces (main)
 
 1. On both laptops, keep **2 spaces**.
@@ -82,7 +91,9 @@ In every grip, **palms moving apart** lets go. A lifeless arm can't hold, and dr
 
 ## Floor (calibration)
 
-Each laptop measures its own floor. Press **Calibrate floor** (or C), walk to your front, back, left and right edges, then press it again. It's remembered on that laptop (**Forget floor** clears it).
+**New cubes appear** (toggle): **mostly left and right** (default: on the far side from where you stand, near the middle front to back, so you walk a lot sideways), or **anywhere you can reach**.
+
+Each laptop measures its own floor. Press **Calibrate floor** (on the start card, in the Floor section, or C), walk to your front, back, left and right edges, then press it again. It's remembered on that laptop (**Forget floor** clears it).
 
 - **The measured floor sets** (toggle): the walk gain (so your floor stretches to fill the room, up to 4×) + where cubes appear (always somewhere you can reach; the first one at the far end of your floor). Or only one of the two. Not measured: the walk gain slider and the area sliders, as before.
 - **Rooms of different sizes** (2 spaces, toggle):
@@ -107,7 +118,7 @@ Each laptop measures its own floor. Press **Calibrate floor** (or C), walk to yo
 
 ## The panel
 
-A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Explanations are in the ⓘ tooltips. The panel remembers which sections you left open.
+A **quick bar** at the top holds what you use every test: Camera + skeletons (J), Stats (D), View (V), Solo (S), Calibrate (C), Setup (back to the start card), Restart (R), Log (O). Settings that don't apply right now fold into one greyed line saying why. Explanations are in the ⓘ tooltips. The panel remembers which sections you left open.
 
 ## Keys
 

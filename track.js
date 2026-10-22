@@ -46,7 +46,8 @@ const SET = {
   grip: 'squeeze',       // 'squeeze' | 'palm' (palm facing) | 'touch' (just touching) | 'dwell'
   touch: 0.08,           // how close a palm has to be to count as touching (m)
   holdTime: 2,           // seconds above the waist to finish
-  areaW: 1.4, areaD: 1.4,// real floor you can walk, where new cubes may appear (m)
+  areaW: 2.0, areaD: 1.4,
+  spawnLR: true,         // new cubes appear mostly to the left and right (on the other side from you)// real floor you can walk, where new cubes may appear (m)
   // ---- view ----
   view: 'behind',        // 'behind' | 'first' | 'orbit'
   camLock: 'forward',    // the view: 'forward' (never turns) | 'cube' (keeps the cube ahead) | 'turn' (turns with the body, slowly)
@@ -117,6 +118,7 @@ function setPerson(id, key, raw, now, smoothIt) {
   let p = people[id];
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
+  if (raw.img) { p.img = raw.img; p.size = raw.size; }
   let t = now / 1000, fz = feel(), j = {};
   for (let n of JN) {
     let q = raw.j[n]; if (!q) continue;
@@ -190,9 +192,9 @@ async function startMediaPipe(deviceId) {
     let either = async (mk, n) => { try { return await mk('GPU', n); } catch (e) { return await mk('CPU', n); } };
     let split = SET.mpSplit && SET.spaces === 1 && SET.comp === 'off';
     if (split) {
-      MP.halves = [await either(make, 1), await either(make, 1)];
+      MP.halves = [await either(make, 2), await either(make, 2)];   // 2 per half, so a passer-by can't take your place
       MP.crop = MP_HALVES.map(() => { let c = document.createElement('canvas'); return { c, ctx: c.getContext('2d') }; });
-    } else MP.lm = await either(make, SET.spaces === 1 && SET.comp === 'off' ? 2 : 1);
+    } else MP.lm = await either(make, SET.spaces === 1 && SET.comp === 'off' ? 3 : 2);   // a spare, so we can choose who to follow
     if (SET.hands === 'hand') {
       let mkH = (d, n) => HandLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: d },
         runningMode: 'VIDEO', numHands: n, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
@@ -255,7 +257,7 @@ function mpTick(now) {
     let j = { pelvis: pel };
     for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
     j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
-    list.push({ key: null, j, chir, lm, hands: {} });
+    list.push({ key: null, j, chir, lm, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y } });   // size: torso height as a share of the picture
   }
   matchHands(list, sx, chir);
   ingest(list, now);
@@ -301,26 +303,54 @@ function ingest(list, now) {
   TRK.hzFrames++;
   if (now - TRK.hzStart > 1000) { TRK.hz = TRK.hzFrames * 1000 / (now - TRK.hzStart); TRK.hzFrames = 0; TRK.hzStart = now; }
   if (!list.length) return;
-  let nearest = () => list.slice().sort((a, b) => a.j.pelvis.z - b.j.pelvis.z)[0];
-  // computer partner: you are the nearest person; the computer plays the other one
-  if (SET.comp !== 'off') { setPerson(SET.comp === 'P2' ? 1 : 2, 'you', nearest(), now, true); return; }
-  // 2 spaces: one person per camera; this laptop's person
-  if (SET.spaces === 2) { setPerson(NET.myId, 'me', nearest(), now, true); return; }
-  // 1 space: the two nearest people, P1 on screen left
-  let pick = {};
-  if (list.length >= 2) {
-    let two = list.slice().sort((a, b) => a.j.pelvis.z - b.j.pelvis.z).slice(0, 2).sort((a, b) => a.j.pelvis.x - b.j.pelvis.x);
-    pick[1] = two[0]; pick[2] = two[1];
-  } else {
-    let p = list[0], best = null, bd = 0.5;
-    for (let k of [1, 2]) {
-      let s = people[k]; if (!s || !s.j) continue;
-      let d = Math.hypot(s.j.pelvis.x - p.j.pelvis.x, s.j.pelvis.z - p.j.pelvis.z); if (d < bd) { bd = d; best = k; }
-    }
-    pick[best || (p.j.pelvis.x < 0 ? 1 : 2)] = p;
-  }
-  for (let k of [1, 2]) { if (pick[k]) setPerson(k, null, pick[k], now, true); }
+  // which slots this camera fills: you (computer partner), this laptop's person (2 spaces), or both (1 space)
+  let slots = SET.comp !== 'off' ? [SET.comp === 'P2' ? 1 : 2] : SET.spaces === 2 ? [NET.myId] : [1, 2];
+  let pick = LOCK.on ? pickLocked(list, slots, now) : pickBiggest(list, slots);
+  for (let k of slots) { if (pick[k]) setPerson(k, null, pick[k], now, true); }
 }
+
+// WHO IS FOLLOWED. Before START: the biggest person in the picture (in 1 space the two
+// biggest, P1 on screen left). At START that choice is locked: from then on each slot
+// only follows the body nearest where its person was, of about the same size, so other
+// people walking through the picture are ignored.
+const LOCK = { on: false, slots: {} };
+function pickBiggest(list, slots) {
+  let big = list.slice().sort((a, b) => b.size - a.size), out = {};
+  if (slots.length === 1) { out[slots[0]] = big[0]; return out; }
+  if (big.length >= 2) { let two = big.slice(0, 2).sort((a, b) => a.j.pelvis.x - b.j.pelvis.x); out[1] = two[0]; out[2] = two[1]; return out; }
+  let p = big[0], best = null, bd = 0.5;
+  for (let k of [1, 2]) {
+    let s = people[k]; if (!s || !s.j) continue;
+    let d = Math.hypot(s.j.pelvis.x - p.j.pelvis.x, s.j.pelvis.z - p.j.pelvis.z); if (d < bd) { bd = d; best = k; }
+  }
+  out[best || (p.j.pelvis.x < 0 ? 1 : 2)] = p;
+  return out;
+}
+function pickLocked(list, slots, now) {
+  let out = {}, used = new Set();
+  for (let k of slots) {
+    let L = LOCK.slots[k]; if (!L) continue;
+    let reach = now - L.t > 1500 ? 0.6 : 0.25, best = -1;   // gone a while: look wider for them
+    list.forEach((c, i) => {
+      if (used.has(i)) return;
+      let r = c.size / L.size, d = Math.hypot(c.img.x - L.x, c.img.y - L.y);
+      if (r < 0.6 || r > 1.65 || d >= reach) return;
+      reach = d; best = i;
+    });
+    if (best < 0) continue;
+    let c = list[best]; used.add(best); out[k] = c;
+    L.x = c.img.x; L.y = c.img.y; L.size += (c.size - L.size) * 0.1; L.t = now;
+  }
+  return out;
+}
+// lock whoever is being followed right now (webcam only; the demo and computer people need no lock)
+function lockPeople() {
+  LOCK.slots = {};
+  for (let k of [1, 2]) { let p = people[k]; if (p && p.img && p.key !== 'computer') LOCK.slots[k] = { x: p.img.x, y: p.img.y, size: p.size, t: performance.now() }; }
+  LOCK.on = SET.source === 'mediapipe';
+  logEvent('lock', { slots: Object.keys(LOCK.slots).join(',') });
+}
+function unlockPeople() { LOCK.on = false; LOCK.slots = {}; }
 
 // =====================================================================
 // MADE-UP PEOPLE: the demo, and the computer partner

@@ -527,7 +527,12 @@ function taskStep(dt) {
 function spawnCube(first) {
   let pos = null;
   if (usable(1) && SET.calUse !== 'gain') pos = spawnInFloor(first);
-  else if (!first) {
+  else if (SET.spawnLR) {
+    // mostly left and right: the other side from where the body is now
+    let bx = AV.ok ? AV.root.x - START.x : 0, side = first || Math.abs(bx) < 0.2 ? (Math.random() < 0.5 ? -1 : 1) : (bx > 0 ? -1 : 1);
+    let rx = side * SET.areaW / 2 * rand(0.75, 1), rz = rand(-0.3, 0);
+    pos = new V3(clamp(START.x + rx * effGain(), -ROOM.x + 0.7, ROOM.x - 0.7), 0, START.z + rz * effGain() - 0.47);
+  } else if (!first) {
     for (let k = 0; k < 120 && !pos; k++) {
       let rx = rand(-SET.areaW / 2, SET.areaW / 2), rz = rand(-SET.areaD, 0.1);
       let stand = new V3(START.x + rx * effGain(), 0, START.z + rz * effGain()), c = stand.clone().add(new V3(0, 0, -0.47));

@@ -73,6 +73,9 @@ function netOn(m) {
   // guest: the world arrives
   if (m.type === 'snap' && NET.role === 'guest') {
     NET.snapPrev = NET.snap; NET.snap = m.s; NET.snapT = performance.now(); setOther(m.rect);
+    // joined after P1 pressed START (or P1 went back to setup): catch up
+    if (m.started && !RUN.started) { lockPeople(); RUN.started = true; updatePanel(); }
+    else if (!m.started && RUN.started) { unlockPeople(); RUN.started = false; updatePanel(); }
     let changed = false, retrack = false;
     for (let k in (m.set || {})) {
       if (NET_LOCAL.includes(k) || SET[k] === m.set[k]) continue;
@@ -87,6 +90,8 @@ function netOn(m) {
   // the host measures both floors: its Calibrate starts and stops P2's too
   if (m.type === 'cal' && NET.role === 'guest' && m.on !== CAL.active) calibrate();
   if (m.type === 'calforget' && NET.role === 'guest') forgetFloor();
+  if (m.type === 'start' && NET.role === 'guest') { lockPeople(); RUN.started = true; updatePanel(); }
+  if (m.type === 'setup' && NET.role === 'guest') { unlockPeople(); RUN.started = false; updatePanel(); }
 }
 function netTick(now) {
   if (SET.spaces !== 2 || !NET.role) return;
@@ -98,7 +103,7 @@ function netTick(now) {
   NET.lastSend = now;
   if (NET.role === 'guest') { let me = live(2); netSend({ type: 'body', p: me ? packPerson(me) : null, rect: CAL.rect }); return; }
   let set = {}; for (let k in SET) { if (!NET_LOCAL.includes(k)) set[k] = SET[k]; }
-  netSend({ type: 'snap', s: SNAP, set, rect: CAL.rect });
+  netSend({ type: 'snap', s: SNAP, set, rect: CAL.rect, started: RUN.started });
 }
 // the guest draws the host's world, eased between updates so it doesn't stutter
 function guestSnap(dt) {

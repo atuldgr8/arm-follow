@@ -135,7 +135,7 @@ function restartAll() {
 }
 function restartTracking() { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); else { people[1] = null; people[2] = null; DEMO.reset = true; } }
 function setupPanel() {
-  $('src').onchange = e => { setSource(e.target.value, $('cam').value); updatePanel(); };
+  $('src').onchange = e => { unlockPeople(); RUN.started = false; setSource(e.target.value, $('cam').value); updatePanel(); };
   cameraList().then(l => { $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join(''); });
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
   let sel = (id, key, after, num) => { $(id).value = String(SET[key]); $(id).onchange = e => { SET[key] = num ? parseFloat(e.target.value) : e.target.value; if (after) after(); updatePanel(); }; };
@@ -168,7 +168,9 @@ function setupPanel() {
   sl('turnmax', 'turnMax', v => v >= 180 ? 'no limit' : '±' + v + '°');
   sel('camlock', 'camLock'); sel('examine', 'examine');
   sl('examd', 'examineDist', v => v.toFixed(1) + ' m'); tog('btn-xray', 'xray');
-  $('btn-cal').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
+  $('btn-cal').onclick = calibrate; $('btn-cal2').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
+  $('btn-start').onclick = startRun; $('btn-setup').onclick = backToSetup;
+  $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
   $('btn-restart').onclick = restartAll; $('btn-log').onclick = saveLog; $('btn-viewq').onclick = () => { cycleView(); updatePanel(); };
@@ -199,7 +201,10 @@ function updatePanel() {
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
-    (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '') + (CAL.rect ? '' : ' (Calibrate in the bar above)');
+    (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
+  $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor'; $('btn-cal2').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
+  $('spawnlr').value = SET.spawnLR ? '1' : '0';
+  $('ready-floor').textContent = CAL.rect ? 'Measured: ' + fmt(CAL.rect) + (CAL.active ? '' : ' ✓') : CAL.active ? '' : 'Not measured.';
   for (let [id, key] of [['src', 'source'], ['hands', 'hands'], ['mpmodel', 'mpModel'], ['comp', 'comp'], ['spaces', 'spaces'], ['own', 'own'], ['ownL', 'ownL'], ['ownR', 'ownR'], ['lifeless', 'lifeless'], ['rstyle', 'returnStyle'], ['grip', 'grip'], ['holders', 'holders'], ['view', 'view'], ['camlock', 'camLock'], ['examine', 'examine'], ['caluse', 'calUse'], ['roomfit', 'roomFit']]) { $(id).value = String(SET[key]); }
   $('mpsplit').value = SET.mpSplit ? '1' : '0';
   for (let [id, key] of [['tol', 'tol'], ['turn', 'turnTol'], ['lag', 'lag'], ['lstr', 'lyingStrength'], ['rtime', 'returnTime'], ['touch', 'touch'], ['gain', 'gain']]) { $(id).value = SET[key]; }
@@ -213,9 +218,39 @@ function updatePanel() {
   $('net-status').textContent = NET.status;
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
-  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror'];
+  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror', 'btn-start'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
+}
+
+// ---------------- the start card ----------------
+// Webcam: the card shows until START. START locks onto the people being followed (the
+// biggest in the picture) and starts fresh. Setup brings the card back.
+const RUN = { started: false };
+function startRun() {
+  if (isGuest()) return;
+  if (CAL.active) calibrate();
+  lockPeople(); RUN.started = true; restartWorld();
+  if (NET.connected) netSend({ type: 'start' });
+  toast('Started'); updatePanel();
+}
+function backToSetup() {
+  if (isGuest()) { toast('P1’s laptop decides this'); return; }
+  unlockPeople(); RUN.started = false;
+  if (NET.connected) netSend({ type: 'setup' });
+  updatePanel();
+}
+function readyStep() {
+  let show = SET.source === 'mediapipe' && !RUN.started;
+  $('ready').style.display = show ? 'block' : 'none'; $('waiting').style.visibility = show ? 'hidden' : 'visible'; if (!show) return;
+  let guest = isGuest();
+  $('btn-start').style.display = guest ? 'none' : 'block'; $('ready-guest').style.display = guest ? 'block' : 'none';
+  let mine = SET.comp !== 'off' ? [SET.comp === 'P2' ? 1 : 2] : SET.spaces === 2 ? [NET.connected ? NET.myId : 1] : [1, 2];
+  let seen = mine.filter(k => live(k)), n = (MP.found || []).length;
+  $('ready-who').innerHTML = (mine.length === 2 ? 'The two biggest people in the picture become P1 (screen left) and P2.' : 'The biggest person in the picture is followed' + (SET.spaces === 2 ? ' as ' + (mine[0] === 1 ? 'P1' : 'P2') : '') + '.') +
+    ' Anyone else is ignored after START. Check the camera view (J) shows the right person labelled.<br><span style="color:' + (seen.length === mine.length ? '#7fd39a' : '#d9a46a') + '">' +
+    (seen.length === mine.length ? 'Ready: ' + seen.map(k => 'P' + k).join(' + ') + ' found' : 'Looking for ' + (mine.length === 2 ? 'two people' : 'you')) + ' · ' + n + ' in the picture</span>';
+  $('btn-start').disabled = seen.length < mine.length;
 }
 
 function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
@@ -252,7 +287,7 @@ function frame(now) {
   if (isGuest()) S = guestSnap(dt);
   else { simStep(dt, now); S = SNAP; }
   sceneRender(S, dt);
-  hudStep(S); statsStep(S); pipStep(); logTick(now, S);
+  hudStep(S); statsStep(S); pipStep(); readyStep(); logTick(now, S);
 }
 sceneInit($('stage'));
 setupPanel();
