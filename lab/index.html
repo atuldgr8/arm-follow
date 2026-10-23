@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracking Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --paper: #F7F7F5; --card: #fff; --field: #F1F1EE; --ink: #1A1A1A; --ink2: rgba(26,26,26,0.62); --ink3: rgba(26,26,26,0.38); --line: rgba(26,26,26,0.09); --edge: rgba(26,26,26,0.14); --mono: "DM Mono", ui-monospace, Menlo, Consolas, monospace; }
+    html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--mono); overflow: hidden; }
+    button, select, input { font-family: var(--mono); }
+    #wrap { display: flex; height: 100vh; }
+    #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #view { flex: 1.15; width: 100%; min-height: 0; display: block; }
+    #graphs { flex: 1; width: 100%; min-height: 0; display: block; border-top: 1px solid var(--line); }
+    #panel { width: 340px; min-width: 340px; overflow-y: auto; border-left: 1px solid var(--line); padding: 16px 14px 30px; box-sizing: border-box; font-size: 12px; }
+    h1 { font-size: 17px; font-weight: 500; margin: 2px 4px 4px; } .sub { color: var(--ink3); font-size: 10px; margin: 0 4px 12px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 11px 13px; margin-top: 8px; }
+    .ct { font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 500; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .ct::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--c, #6FC3FF); }
+    .f { padding: 6px 0; } label { display: flex; align-items: center; gap: 6px; margin: 0 0 5px; } .val { margin-left: auto; color: var(--ink2); font-size: 11px; }
+    select, input[type=text] { width: 100%; box-sizing: border-box; appearance: none; -webkit-appearance: none; background: var(--field); border: 1px solid transparent; border-radius: 8px; padding: 7px 10px; font-size: 12px; color: var(--ink); }
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; margin: 0; }
+    input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--edge); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--c, #fff); border: 1px solid var(--ink); }
+    button { font-size: 12px; background: #fff; color: var(--ink); border: 1px solid var(--edge); border-radius: 8px; padding: 7px 11px; cursor: pointer; } button:hover { border-color: var(--ink); } button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; } .row > * { flex: 1; }
+    #status { font-size: 11px; color: var(--ink2); line-height: 1.5; margin-top: 8px; }
+    .m { border-top: 1px solid var(--line); padding: 8px 0 4px; } .m:first-child { border-top: none; }
+    .mh { font-weight: 500; cursor: pointer; } .mh input { accent-color: var(--ink); margin: 0; } .dot { width: 18px; height: 3px; border-radius: 2px; background: var(--c); display: inline-block; }
+    .tip { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--edge); color: var(--ink3); font-size: 9px; cursor: help; font-style: italic; }
+    #tipbox { position: fixed; z-index: 9; max-width: 250px; background: var(--ink); color: #fff; font: 11.5px/1.5 var(--mono); padding: 9px 11px; border-radius: 10px; pointer-events: none; opacity: 0; transition: opacity 0.12s; }
+    #numbers table { width: 100%; border-collapse: collapse; font-size: 11px; } #numbers th { text-align: right; font-weight: 400; color: var(--ink3); padding: 3px 4px; } #numbers th:first-child { text-align: left; }
+    #numbers td { text-align: right; padding: 4px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; } #numbers td:first-child { text-align: left; }
+    .sw2 { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+    .note { color: var(--ink3); font-size: 10.5px; line-height: 1.5; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="main"><canvas id="view"></canvas><canvas id="graphs"></canvas></div>
+    <div id="panel">
+      <h1>Tracking Lab</h1><div class="sub">every smoothing method on the same movement · v1 · 24 Oct</div>
+
+      <div class="card" style="--c:#6FC3FF">
+        <div class="ct">Input</div>
+        <select id="src">
+          <option value="test">Test motion (known path + shake)</option>
+          <option value="pose">Webcam · body model (33 points)</option>
+          <option value="hands">Webcam · hand model (21 points per hand)</option>
+          <option value="both">Webcam · body + hands</option>
+          <option value="kinect">Kinect (Kinectron app)</option>
+          <option value="replay">Recording (lab or Arm Follow log)</option>
+        </select>
+        <div id="g-cam"><div class="f"><label>Camera</label><select id="cam"></select></div>
+          <div class="f"><label>Body model</label><select id="model"><option value="lite">Lite (fast)</option><option value="full">Full (steadier, slower)</option></select></div></div>
+        <div id="g-kinect"><div class="f"><label>Kinectron app IP<span class="tip" title="Run the Kinectron 0.4.0 app (Windows, Kinect v2), start body tracking, type the IP it shows. 127.0.0.1 if it's on this computer. From the online page only 127.0.0.1 works (browsers block other local addresses from a secure page); for another computer, download the lab and open it locally.">i</span></label>
+          <div class="row"><input type="text" id="kip"><button id="btn-kc" style="flex:0">Connect</button></div></div></div>
+        <div id="g-replay"><div class="f"><label>Recording file<span class="tip" title="A lab recording (Record, below) or an Arm Follow log (press O in Arm Follow: it keeps the last 20 s of tracking). It loops, so you can change methods and settings on exactly the same movement.">i</span></label><input type="file" id="file" accept=".json"></div></div>
+        <div id="g-test"><div class="f"><label>Shake added<span class="val" id="v-noise">3.0 px</span></label><input type="range" id="noise" min="0" max="12" step="0.5" value="3"></div></div>
+        <div id="status"></div>
+      </div>
+
+      <div class="card" style="--c:#5FE0B0">
+        <div class="ct">What you see</div>
+        <div class="f"><label>Skeleton drawn with</label><select id="show"></select></div>
+        <div class="f"><label>Graphed point</label><div class="row"><select id="stream"></select><select id="point"></select></div></div>
+        <div class="f"><label>Graphs show the last<span class="val" id="v-secs">5 s</span></label><input type="range" id="secs" min="2" max="12" step="1" value="5"></div>
+        <div class="row"><button id="btn-ghost">Raw faintly</button><button id="btn-mirror">Mirror</button></div>
+      </div>
+
+      <div class="card" style="--c:#FFD23F">
+        <div class="ct">Numbers</div>
+        <div id="numbers"></div>
+      </div>
+
+      <div class="card" style="--c:#FF8CC6">
+        <div class="ct">Methods</div>
+        <div id="methods"></div>
+        <div class="row" style="margin-top:8px"><button id="btn-reset">Restart filters</button><button id="btn-copy">Copy settings</button></div>
+      </div>
+
+      <div class="card" style="--c:#FF9A4D">
+        <div class="ct">Record</div>
+        <div class="row"><button id="btn-rec">Record</button></div>
+        <div class="note">Records the raw tracking (any input). Load it under Input → Recording to replay exactly the same movement through every method.</div>
+      </div>
+      <div class="note" style="text-align:center;margin-top:16px">How to read it: stand still and look at the shake column; then move (wave, reach) and look at the lag column and the graphs. The best method is the one that's steady when you're still and keeps up when you move.</div>
+    </div>
+  </div>
+  <div id="tipbox"></div>
+  <script src="kinectron-client.js?v=1"></script>
+  <script type="module">
+    import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs')
+      .then(m => { window.FilesetResolver = m.FilesetResolver; window.PoseLandmarker = m.PoseLandmarker; window.HandLandmarker = m.HandLandmarker; window.mpLoaded = true; })
+      .catch(e => { window.mpError = String(e && e.message || e); });
+  </script>
+  <script src="filters.js?v=1"></script>
+  <script src="lab.js?v=1"></script>
+</body>
+</html>
