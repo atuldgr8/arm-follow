@@ -57,7 +57,7 @@ function statsStep(S) {
     `arms ${armTxt}`,
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
-    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => 'P' + k + ' ' + MPF[k].src + (MPF[k].d ? ' ' + MPF[k].d.toFixed(2) + ' m' : '')).join(' · ') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
+    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => { let M = MPF[k], p = people[k]; return 'P' + k + ' ' + M.src + ' ' + (M.d ? M.d.toFixed(2) : '-') + ' m (shape ' + (M.T ? M.T.x.toFixed(2) + ',' + M.T.z.toFixed(2) : 'none') + ' · size ' + (M.dU ? M.dU.toFixed(2) : '-') + ') · body at ' + (p && p.j ? p.j.pelvis.x.toFixed(2) + ',' + p.j.pelvis.z.toFixed(2) : '-') + (AV.ok ? ' · room ' + AV.root.x.toFixed(2) + ',' + AV.root.z.toFixed(2) : ''); }).join(' · ') + (CAL.active ? ' · MEASURING ' + (CAL.live ? rectW(CAL.live).toFixed(2) + '×' + rectD(CAL.live).toFixed(2) : 'nobody yet') : '') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
     `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
@@ -150,7 +150,7 @@ function pipStep() {
 }
 
 // ---------------- log [O] ----------------
-const LOG = { rows: [], events: [], last: 0, started: new Date().toISOString() };
+const LOG = { rows: [], events: [], cam: [], last: 0, started: new Date().toISOString() };
 function logEvent(kind, data) { LOG.events.push(Object.assign({ t: Math.round(performance.now()), kind }, data || {})); if (LOG.events.length > 5000) LOG.events.shift(); }
 function logTick(now, S) {
   if (now - LOG.last < 100 || !S || !S.hud) return; LOG.last = now;
@@ -160,7 +160,7 @@ function logTick(now, S) {
   if (LOG.rows.length > 12000) LOG.rows.shift();
 }
 function saveLog() {
-  let data = { app: 'Arm Follow v1', started: LOG.started, saved: new Date().toISOString(), settings: SET, events: LOG.events, rows: LOG.rows };
+  let data = { app: 'Arm Follow v1', started: LOG.started, saved: new Date().toISOString(), settings: SET, build: window.BUILD, floor: CAL.rect, calLive: CAL.live, events: LOG.events, rows: LOG.rows, cam: LOG.cam };
   let blob = new Blob([JSON.stringify(data)], { type: 'application/json' }), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'arm-follow-log-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json';
   document.body.appendChild(a); a.click(); a.remove(); toast('Log saved');

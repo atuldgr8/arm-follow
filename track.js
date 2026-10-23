@@ -279,6 +279,12 @@ function mpTick(now) {
 // everything after the body model: who is who, filtering, and building each followed person in metres
 function processFound(found, now, W, H) {
   let tanH = Math.tan(SET.fov * Math.PI / 360), fpx = (W / 2) / tanH;
+  // the log keeps the last 20 s of what the camera's body model saw, so a test can be replayed exactly
+  if (typeof LOG !== 'undefined') {
+    let r4 = v => Math.round(v * 10000) / 10000;
+    LOG.cam.push({ t: Math.round(now), W, H, f: found.map(({ lm, wl }) => ({ lm: lm.map(q => [r4(q.x), r4(q.y), r4(q.visibility || 0)]), wl: wl.map(q => [r4(q.x), r4(q.y), r4(q.z)]) })) });
+    while (LOG.cam.length && now - LOG.cam[0].t > 20000) LOG.cam.shift();
+  }
   MP.found = found.map(f => f.lm);
   let sx = SET.mirror ? -1 : 1, chir = SET.mirror ? 1 : -1, list = [];
   // first, just enough to tell people apart (size and place in the picture)
@@ -377,7 +383,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let fr = feelRoot(), lat0 = (latX - 0.5) * 2 * d * tanH;
   M.fd = M.fd || new OneEuro(); M.fl = M.fl || new OneEuro();
   let dS = M.fd.filter(d, t, fr.minC, fr.beta), latS = M.fl.filter(lat0, t, fr.minC * 1.5, fr.beta);
-  M.d = dS; M.src = src; M.dU = dU;
+  M.d = dS; M.src = src; M.dU = dU; M.T = T; M.raw = d;
   let pel = V(sx * latS, 0.95, dS);
   let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
   let j = { pelvis: pel };
