@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.10.2 fix (23 Oct, from Atul's log)
+
+- **The maquette froze on the first frame** (and so the floor never grew while measuring): on a real laptop a new camera picture arrives on every screen frame, and the glide between pictures was timed from "now", so it restarted at 0% every frame. The main build found and fixed exactly this in V13.1 (time the glide from the frame the body was last drawn); now Arm Follow does the same. Found by replaying Atul's recorded tracking the way a real laptop runs it.
+- Floors measured before v1.10 aren't reused (they judged distance differently): measure again.
+
 ## v1.10 fixes (23 Oct)
 
 - **The body froze and calibration failed:** v1.9's bend-protection treated walking away from the camera (or one noisy frame) as bending and froze the body, sideways too after a floor had been measured, so the floor never grew while calibrating. It's gone.

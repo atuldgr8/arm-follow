@@ -151,7 +151,11 @@ function setPerson(id, key, raw, now, smoothIt) {
   if (glide) {
     // glide from where it's drawn now to the newest position, over about one camera interval
     let interval = p.lastSeen ? Math.min(150, Math.max(16, now - p.lastSeen)) : 0;
-    p.jFrom = p.j ? Object.assign({}, p.j) : j; p.jTo = j; p.gT0 = now; p.gDur = interval * feelPx().glide;
+    // (the main build's V13.1 fix) the glide is timed from the frame the body was last DRAWN, not from
+    // now: when a new camera picture arrives every screen frame (normal on a real laptop), timing it from
+    // now restarted it at 0% every frame and the body stayed frozen where it was first seen
+    p.jFrom = p.j ? Object.assign({}, p.j) : j; p.jTo = j; p.gDur = interval * feelPx().glide;
+    p.gT0 = p.shownT !== undefined && p.shownT < now ? p.shownT : now - 16;
     if (!p.j) p.j = j;
   } else { p.jTo = null; p.j = j; }
   // palms: from the hand model when it found this hand, else from the body model's hand points
@@ -183,7 +187,7 @@ function glidePeople(now) {
     let p = people[k]; if (!p || !p.jTo) continue;
     let u = p.gDur > 0 ? clamp((now - p.gT0) / p.gDur, 0, 1) : 1, j = {};
     for (let n in p.jTo) { let a = p.jFrom[n], b = p.jTo[n]; j[n] = a ? vlerp(a, b, u) : b; }
-    p.j = j;
+    p.j = j; p.shownT = now;
   }
 }
 function agePeople(now) {

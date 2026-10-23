@@ -11,7 +11,8 @@
 
 const VR = { cx: 0, cz: -1.0, w: 7, d: 6 };   // the part of the virtual room the body walks in
 const CAL = { active: false, live: null, rect: null, other: null, samples: [], skipped: false };
-try { let s = localStorage.getItem('armfollow.floor'); if (s) CAL.rect = JSON.parse(s); } catch (e) {}
+// a floor measured before v1.10 used a different way of judging distance, so it isn't reused: measure again
+try { let s = localStorage.getItem('armfollow.floor'); if (s) { let r = JSON.parse(s); if (r && r.v === 2) CAL.rect = r; else localStorage.removeItem('armfollow.floor'); } } catch (e) {}
 const rectW = r => r.x1 - r.x0, rectD = r => r.z1 - r.z0;
 
 // the people standing in this laptop's room
