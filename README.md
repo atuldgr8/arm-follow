@@ -7,10 +7,18 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.10 fixes (23 Oct)
+
+- **The body froze and calibration failed:** v1.9's bend-protection treated walking away from the camera (or one noisy frame) as bending and froze the body, sideways too after a floor had been measured, so the floor never grew while calibrating. It's gone.
+- **Where you stand, from the body's shape (no legs needed):** the body model gives your body's 3D shape in metres; the app finds where that shape must stand for its picture to land where the camera saw you, using every visible point (head, shoulders, elbows, hips, knees). Bending, turning and reaching fit the same shape, so they no longer move the body. In a simulated test (with webcam-like noise) bending 52° and turning 57° moved it by under 1 cm. Feet, when in the picture and the floor was measured with this version, are used as well (floors measured before v1.10 are re-measured).
+- **Where you stand is smoothed on its own,** calmer than the limbs, since the walk gain multiplies its wobble.
+- **The camera view now draws the smoothed skeleton** the game uses (it used to draw the raw detection, so it always looked jittery). **Raw detection under the skeleton** (Tracking) shows the raw one faintly underneath, to compare.
+- Stats line: "where you stand from: body shape / feet".
+
 ## v1.9 changes (tracking rebuilt on the gold standard)
 
 - **Why it went haywire:** MediaPipe tracks the body in the picture very well (that's what the dancer demos show), but it doesn't say where you stand in the room; its 3D points are always centred on your hips. Arm Follow was guessing your distance from how long your torso looked, so bending (a shorter-looking torso) read as a jump backwards, multiplied by the walk gain.
-- **Where you stand now comes from your feet.** Your feet are on the floor, so where they are in the picture says how far away you are (the same idea as single-camera distance estimation in research, e.g. Fei et al., ICCV 2021). Bending, leaning and reaching don't move your feet. This needs a measured floor (walk toward and away from the camera while calibrating); the stats line says "where you stand from: feet / torso / held". Without it: the torso's size, but held still while you bend.
+- **Where you stand now comes from your feet** (superseded in v1.10: from the body's shape, feet as a bonus). Your feet are on the floor, so where they are in the picture says how far away you are (the same idea as single-camera distance estimation in research, e.g. Fei et al., ICCV 2021). Bending, leaning and reaching don't move your feet. This needs a measured floor (walk toward and away from the camera while calibrating); the stats line says "where you stand from: feet / torso / held". Without it: the torso's size, but held still while you bend.
 - **Smoothing ported from the main build (V13.1):** every point is filtered in the picture, once per camera frame, then the body glides between camera frames at the screen's rate. The feel slider means the same as in the main build (default 0.5).
 - **Arms come from the picture,** plus how far they point at the camera. A hand that leaves the picture (overhead, say) keeps its last direction for a moment instead of flailing.
 - **Holding the cube:** held while your palms face each other, as if holding a box, overhead too. Let go by opening your hands outward or pulling them well apart.

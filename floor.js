@@ -28,7 +28,7 @@ function calibrate() {
   CAL.active = false;
   let r = CAL.live;
   if (!r || rectW(r) < 0.5 || rectD(r) < 0.5) { toast('Too small (under 50 cm in one direction): floor not changed'); updatePanel(); return; }
-  CAL.rect = { x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1 };
+  CAL.rect = { x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1, v: 2 };   // v2: measured with the upper-body distance (older floors' feet fits aren't used)
   // where the floor is in the camera picture (feet height in the picture against distance), for the camera view's floor outline
   let fit = fitFloor(CAL.samples); if (fit) { CAL.rect.fa = fit.a; CAL.rect.fb = fit.b; }
   try { localStorage.setItem('armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}

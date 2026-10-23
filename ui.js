@@ -57,7 +57,7 @@ function statsStep(S) {
     `arms ${armTxt}`,
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
-    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => 'P' + k + ' ' + MPF[k].src + (MPF[k].d ? ' ' + MPF[k].d.toFixed(2) + ' m' : '')).join(' · ') + (CAL.rect && CAL.rect.fa !== undefined ? '' : ' (measure the floor, walking toward and away, to use your feet)') : '',
+    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => 'P' + k + ' ' + MPF[k].src + (MPF[k].d ? ' ' + MPF[k].d.toFixed(2) + ' m' : '')).join(' · ') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
     `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
@@ -93,8 +93,12 @@ function pipStep() {
       // followed: in colour, labelled. Anyone else the camera sees: grey and dashed, marked "ignored"
       let slot = [1, 2].find(k => people[k] && people[k].lm === lm) || 0;
       let col = slot === 2 ? 'rgba(255,120,60,0.98)' : slot === 1 ? 'rgba(255,255,255,0.98)' : 'rgba(170,170,170,0.7)';
-      x.strokeStyle = col; x.fillStyle = col; x.lineWidth = slot ? 3 : 1.5; x.lineCap = 'round'; x.setLineDash(slot ? [] : [4, 4]);
-      for (let [a, b] of PIP_BONES) { if (lm[a] && lm[b]) { x.beginPath(); x.moveTo(lm[a].x * w, lm[a].y * h); x.lineTo(lm[b].x * w, lm[b].y * h); x.stroke(); } }
+      // a followed person is drawn as the game uses them (smoothed); the raw detection faintly underneath
+      let shown = slot && people[slot].lmS ? people[slot].lmS : lm;
+      let bones = (pts, c, wd, dash) => { x.strokeStyle = c; x.lineWidth = wd; x.lineCap = 'round'; x.setLineDash(dash); for (let [a, b] of PIP_BONES) { if (pts[a] && pts[b]) { x.beginPath(); x.moveTo(pts[a].x * w, pts[a].y * h); x.lineTo(pts[b].x * w, pts[b].y * h); x.stroke(); } } };
+      if (slot && SET.pipRaw) bones(lm, 'rgba(255,255,255,0.25)', 1, []);
+      bones(shown, col, slot ? 3 : 1.5, slot ? [] : [4, 4]);
+      x.fillStyle = col; lm = shown;
       x.setLineDash([]);
       x.save(); x.translate(lm[0].x * w, lm[0].y * h - 18); if (SET.mirror) x.scale(-1, 1); x.font = 'bold 12px monospace'; x.textAlign = 'center';
       x.fillText(slot ? 'P' + slot + (LOCK.on ? ' · locked' : '') : 'ignored', 0, 0); x.restore();
@@ -186,7 +190,7 @@ function setupPanel() {
   sel('lifeless', 'lifeless'); sel('rstyle', 'returnStyle'); sel('grip', 'grip', () => { if (CUBE.held) dropCube('grip changed'); }); sel('holders', 'holders');
   $('view').value = SET.view; $('view').onchange = e => { setView(e.target.value); updatePanel(); };
   let tog = (id, key, after) => { $(id).onclick = () => { SET[key] = !SET[key]; if (after) after(); updatePanel(); }; };
-  tog('btn-mirror', 'mirror'); tog('btn-solo', 'solo');
+  tog('btn-mirror', 'mirror'); tog('btn-pipraw', 'pipRaw'); tog('btn-solo', 'solo');
   tog('btn-puppet', 'puppetFall'); tog('btn-curl', 'curl'); tog('btn-lyingf', 'lyingFollow'); tog('btn-twitch', 'twitch');
   tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
@@ -236,7 +240,7 @@ function updatePanel() {
   quick('btn-pip', SET.pip); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
-  set('btn-mirror', 'Mirror: ', SET.mirror);
+  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear);

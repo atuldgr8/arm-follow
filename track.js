@@ -66,7 +66,7 @@ const SET = {
   depthDrift: 0.5,       // how much stepping toward/away from the camera counts in the drift (leaning in to reach looks like a step)
   netSmooth: 60,         // P2's laptop: how far behind (ms) it shows P1's world, so it moves smoothly instead of in jumps
   // ---- debug ----
-  hud: true, pip: true,   // pip: the live camera with the skeletons on it, always on to start
+  hud: true, pip: true, pipRaw: false,   // pipRaw: the raw detection faintly under the smoothed skeleton   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
   calUse: 'both',        // the measured floor sets: 'both' | 'gain' (walk gain only) | 'cubes' (where cubes appear only)
   roomFit: 'mapped',     // 2 spaces, rooms of different sizes: 'mapped' (each maps onto the other) | 'smaller' (both use the smaller)
@@ -106,6 +106,8 @@ class OneEuro {
 function feelPx() { let s = SET.smooth; return { minC: 4 * Math.pow(0.0625, s), beta: 0.02 * Math.pow(0.1, s), glide: Math.min(1, 0.3 + 1.4 * s) }; }
 // for the computer partner and anything else still smoothed in metres
 function feel() { let s = SET.smooth; return { minC: 4 * Math.pow(0.0625, s), beta: 2 * Math.pow(0.1, s) }; }
+// where you stand: much calmer than the limbs (distance is the noisiest guess, and the walk gain multiplies it)
+function feelRoot() { let s = SET.smooth; return { minC: 1.2 * Math.pow(0.15, s), beta: 1.5 * Math.pow(0.2, s) }; }
 function handK() { return Math.min(1, 0.85 * Math.pow(0.3, SET.smooth)); }   // smoothing for palm directions
 
 // =====================================================================
@@ -132,7 +134,7 @@ function setPerson(id, key, raw, now, smoothIt) {
   let p = people[id];
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
-  if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; p.distT = raw.distT; }
+  if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; p.distT = raw.distT; p.lmS = raw.lmS; }
   let t = now / 1000, fz = feel(), j = {}, glide = smoothIt === 'glide';
   if (smoothIt === true) {
     for (let n of JN) {
@@ -272,6 +274,11 @@ function mpTick(now) {
     MP.handsFound = (r.landmarks || []).map((lm, i) => ({ lm, wl: r.worldLandmarks[i], t: now }));
   }
   MP.handsFound = MP.handsFound.filter(h => now - h.t < 250);
+  processFound(found, now, W, H);
+}
+// everything after the body model: who is who, filtering, and building each followed person in metres
+function processFound(found, now, W, H) {
+  let tanH = Math.tan(SET.fov * Math.PI / 360), fpx = (W / 2) / tanH;
   MP.found = found.map(f => f.lm);
   let sx = SET.mirror ? -1 : 1, chir = SET.mirror ? 1 : -1, list = [];
   // first, just enough to tell people apart (size and place in the picture)
@@ -288,6 +295,29 @@ function mpTick(now) {
 }
 
 // ---------------- one followed person, from the camera picture ----------------
+// where the body stands: the hips-centred 3D points P (metres; x right, y down, z away, as in the picture)
+// and where each appears in the picture (u, v pixels). For a body at T, a point appears at
+// u = cx + f (Px + Tx) / (Pz + Tz); rearranged, that's linear in T, so least squares over all points.
+const PLACE_PTS = [0, 7, 8, 11, 12, 13, 14, 23, 24, 25, 26];
+function solvePlace(lm, wl, W, H, f) {
+  let A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0], n = 0, cx = W / 2, cy = H / 2;
+  let add = (row, rhs, w) => { for (let i = 0; i < 3; i++) { for (let k = 0; k < 3; k++) { A[i][k] += w * row[i] * row[k]; } b[i] += w * row[i] * rhs; } };
+  for (let i of PLACE_PTS) {
+    let q = lm[i], P = wl[i]; if (!q || !P) continue;
+    let vis = q.visibility === undefined ? 1 : q.visibility;
+    if (vis < 0.5 || q.x < 0.01 || q.x > 0.99 || q.y < 0.01 || q.y > 0.99) continue;
+    let u = q.x * W - cx, v = q.y * H - cy, w = vis * (i >= 11 && i <= 24 ? 2 : 1);   // shoulders and hips count double
+    add([f, 0, -u], u * P.z - f * P.x, w);
+    add([0, f, -v], v * P.z - f * P.y, w);
+    n++;
+  }
+  if (n < 4) return null;
+  // 3×3 solve (Cramer)
+  let det = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  let D = det(A); if (Math.abs(D) < 1e-9) return null;
+  let col = k => A.map((r, i) => r.map((v, j) => j === k ? b[i] : v));
+  return { x: det(col(0)) / D, y: det(col(1)) / D, z: det(col(2)) / D };
+}
 const MPF = {};   // per slot: the One Euro filters for the picture points and the 3D points, and a little memory
 function filterPts(arr, store, t, scale, withZ, fz) {
   return arr.map((q, i) => {
@@ -298,39 +328,57 @@ function filterPts(arr, store, t, scale, withZ, fz) {
   });
 }
 function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
-  let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, torsoRef: 0, arm: {} });
+  let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, arm: {} });
   let t = now / 1000, fz = feelPx();
   let lm = filterPts(c.lm, M.lm, t, { x: W, y: H }, false, fz);
   let wl = filterPts(c.wl, M.wl, t, { x: 1000, y: 1000 }, true, fz);   // 3D points in millimetres, as in the main build
   let sImg = vmid(lm[11], lm[12]), hImg = vmid(lm[23], lm[24]);
-  let torsoPx = Math.max(20, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
   let sW = vmid(wl[11], wl[12]), hW = vmid(wl[23], wl[24]);
-  // the torso's length as the camera sees it (its up-down and sideways part only), so a torso tipped
-  // toward the camera looks shorter in both, and the distance doesn't jump
-  let torsoM = clamp(Math.hypot(sW.x - hW.x, sW.y - hW.y), 0.12, 0.7);
 
-  // WHERE YOU STAND. Gold standard for one camera: your feet are on the floor, so where your feet
-  // are in the picture says how far away you are (the measured floor knows the camera's view of it).
-  // Bending, leaning and reaching don't move your feet, so they no longer move the body.
-  let r = CAL.rect, ankL = lm[27], ankR = lm[28], feetSeen = [ankL, ankR].every(a => a && (a.visibility === undefined || a.visibility > 0.5) && a.y < 0.985);
-  let d = null, latX = hImg.x, src = 'torso';
-  // (while measuring the floor, the torso's size is used, so the floor and its fit share one scale)
-  let dT = clamp(fpx * torsoM / torsoPx, 0.8, 8);
-  if (r && r.fa !== undefined && feetSeen && !CAL.active) {
-    let ay = Math.max(ankL.y, ankR.y), dz = r.fb / Math.max(1e-4, ay - r.fa);
-    if (ay - r.fa > 0.005 && dz > 0.5 && dz < 10) { d = dz; latX = (ankL.x + ankR.x) / 2; src = 'feet'; }
+  // HOW FAR AWAY, from the upper body (no legs needed). The body model knows the real size of your torso
+  // and shoulders (in metres, the way the camera sees them, so a torso tipped toward the camera is shorter
+  // in metres AND in the picture); real size ÷ size in the picture = distance. Two measures, because
+  // bending shortens the torso but not the shoulders, and turning narrows the shoulders but not the torso;
+  // each counts by how big it looks (bigger = more reliable).
+  let torsoPx = Math.max(8, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
+  let shPx = Math.max(8, Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H));
+  let torsoM = Math.hypot(sW.x - hW.x, sW.y - hW.y), shM = Math.hypot(wl[11].x - wl[12].x, wl[11].y - wl[12].y);
+  let dTo = fpx * clamp(torsoM, 0.1, 0.7) / torsoPx, dSh = fpx * clamp(shM, 0.08, 0.5) / shPx;
+  // those say how far your shoulders (and the middle of your torso) are; when you bend or lean, they
+  // come toward the camera while your hips stay put. The body model knows how far forward your
+  // shoulders are from your hips, so take that off: what's left is where your hips (you) are.
+  let fwd = clamp(sW.z - hW.z, -0.6, 0.6);
+  dTo -= fwd / 2; dSh -= fwd;
+  let dU = clamp((dTo * torsoPx + dSh * shPx) / (torsoPx + shPx), 0.6, 8);
+  let d = dU, latX = hImg.x, src = 'upper body';
+  // BETTER, when it solves: the body model gives your body's 3D shape in metres (centred on your hips);
+  // find where that shape has to stand so its picture lands exactly where the camera saw you. Every
+  // visible point votes, so bending, turning and reaching all fit the same shape (the standard way to
+  // place a known 3D shape from one picture, with the camera's field of view).
+  let T = solvePlace(lm, wl, W, H, fpx);
+  if (T && T.z > 0.5 && T.z < 8) { d = clamp(T.z, 0.6, 8); latX = 0.5 + T.x * fpx / (T.z * W); src = 'body shape'; }
+  let dB = d;   // the body's own estimate (no feet)
+
+  // FEET, a bonus when they're in the picture and the floor was measured (this version's measurement):
+  // where your feet meet the floor in the picture says the distance, unaffected by bending.
+  // The two are kept in step, so nothing jumps when your feet come into or leave the picture.
+  let r = CAL.rect, ankL = lm[27], ankR = lm[28];
+  let feetSeen = [ankL, ankR].every(q => q && (q.visibility === undefined || q.visibility > 0.6) && q.y < 0.98);
+  if (M.kF === undefined) M.kF = 1;
+  if (r && r.v === 2 && r.fa !== undefined && feetSeen && !CAL.active) {
+    let ay = Math.max(ankL.y, ankR.y), dF = ay - r.fa > 0.01 ? r.fb / (ay - r.fa) : 0, k = dF / dB;
+    if (k > 0.6 && k < 1.6) { d = dF; latX = (ankL.x + ankR.x) / 2; src = 'feet'; M.kF += (k - M.kF) * 0.05; }
+    else src += ' (feet disagree: measure the floor again)';
   }
-  if (d === null) {
-    // no feet (or no measured floor): fall back on the torso's size, but not while you bend.
-    // Bending makes the torso look shorter, which would look like a jump backwards: hold still instead.
-    M.torsoRef = M.torsoRef ? (torsoPx > M.torsoRef ? torsoPx : M.torsoRef + (torsoPx - M.torsoRef) * 0.04) : torsoPx;
-    let bending = torsoPx < 0.82 * M.torsoRef;
-    if (bending && M.d !== null) { d = M.d; src = 'held'; } else d = dT;
-    if (src === 'held' && r && feetSeen === false && M.lat !== undefined) latX = M.lat;
-  }
-  M.d = d; M.lat = latX; M.src = src;
-  let lat = (latX - 0.5) * 2 * d * tanH;
-  let pel = V(sx * lat, 0.95, d);
+  if (src !== 'feet') d = clamp(dB * M.kF, 0.6, 8);
+
+  // a calm filter on where you stand (it's multiplied by the walk gain, so its wobble would be too):
+  // still when you stand still, follows when you walk
+  let fr = feelRoot(), lat0 = (latX - 0.5) * 2 * d * tanH;
+  M.fd = M.fd || new OneEuro(); M.fl = M.fl || new OneEuro();
+  let dS = M.fd.filter(d, t, fr.minC, fr.beta), latS = M.fl.filter(lat0, t, fr.minC * 1.5, fr.beta);
+  M.d = dS; M.src = src; M.dU = dU;
+  let pel = V(sx * latS, 0.95, dS);
   let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
   let j = { pelvis: pel };
   for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
@@ -338,7 +386,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   // ARMS from the picture, where MediaPipe is strongest: the direction you see, plus how far it points
   // at the camera (an arm pointing at you looks short; knowing its real length says how short).
   // A hand that leaves the picture keeps its last direction for a moment instead of flailing.
-  let mPx = d / fpx;
+  let mPx = dS / fpx;
   for (let s of ['L', 'R']) {
     let mem = M.arm[s] || (M.arm[s] = {});
     let wr = lm[MPJ['wr' + s]], el = lm[MPJ['el' + s]];
@@ -362,7 +410,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
     if (!lost) { mem.rel = {}; for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { mem.rel[c2] = vsub(j[c2 + s], j['sh' + s]); } mem.t = now; }
   }
   j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
-  return { key: null, j, chir: c.chir, lm: c.lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: d, distT: dT };
+  return { key: null, j, chir: c.chir, lm: c.lm, lmS: lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: dS, distT: dB };
 }
 // give each hand the hand model found to the nearest wrist the body model found
 function matchHands(list, sx, chir) {
