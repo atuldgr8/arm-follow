@@ -334,10 +334,10 @@ function cameraStep(S, dt, b) {
   let c = fromArr(S.cube.c), d = Math.hypot(c.x - root.x, c.z - root.z);
   let eT = SET.examine === 'off' || SET.fpNear ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
   SC.exam += (eT - SC.exam) * Math.min(1, dt * 2.5);
+  if (!SC.cubeS || SC.cubeS.distanceTo(c) > 1) SC.cubeS = c.clone();
+  SC.cubeS.lerp(c, Math.min(1, dt * 4));
   if (SC.exam > 0.001) {
     // anchored mostly on the cube (which holds still), not the body
-    if (!SC.cubeS || SC.cubeS.distanceTo(c) > 1) SC.cubeS = c.clone();
-    SC.cubeS.lerp(c, Math.min(1, dt * 4));
     let cs = SC.cubeS, mid = root.clone().lerp(cs.clone().setY(0), 0.7), posE;
     let lookE = mid.clone().setY(clamp(cs.y - 0.1, 0.6, 1.4));
     if (SET.examine === 'high') posE = mid.clone().addScaledVector(fwd, -0.8).addScaledVector(right, 0.45).setY(2.9);
@@ -351,14 +351,18 @@ function cameraStep(S, dt, b) {
   let fpWanted = SET.fpNear && ((!S.cube.held && h.near < SET.examineDist) || (S.cube.held && carry && S.target && h.nearT < SET.examineDist) || (S.cube.held && !carry));
   SC.fp += ((fpWanted ? 1 : 0) - SC.fp) * Math.min(1, dt * 2.2);
   let f = smooth01(SC.fp);
-  if (f > 0.001) {
-    let eye = b.head.clone().addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
-    let focus = S.cube.held && carry && S.target ? new V3(S.target[0], PLINTH.h + 0.1, S.target[1]) : c.clone();
-    want.lerp(eye, f); look.lerp(focus, f);
-  }
+  // the first-person eye follows a calmed copy of the head (and looks at a calmed target), so the view
+  // stays steady even when tracking gets less sure close to the cube
+  let eyeRaw = b.head.clone().addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
+  if (!SC.eyeS || SC.eyeS.distanceTo(eyeRaw) > 1.5) SC.eyeS = eyeRaw.clone();
+  SC.eyeS.lerp(eyeRaw, Math.min(1, dt * 3));
+  let focusRaw = S.cube.held && carry && S.target ? new V3(S.target[0], PLINTH.h + 0.1, S.target[1]) : (SC.cubeS ? SC.cubeS.clone() : c.clone());
+  if (!SC.focusS || SC.focusS.distanceTo(focusRaw) > 3) SC.focusS = focusRaw.clone();
+  SC.focusS.lerp(focusRaw, Math.min(1, dt * 2));
+  if (f > 0.001) { want.lerp(SC.eyeS, f); look.lerp(SC.focusS, f); }
   let fovT = 55 + 25 * f;
   if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov = fovT; cam.updateProjectionMatrix(); }
-  let k = Math.min(1, dt * (5 - 2.5 * SC.exam + 10 * f));   // calmer while examining; close on the head in first person
+  let k = Math.min(1, dt * (5 - 2.5 * SC.exam + 4 * f));   // calmer while examining; follows the calmed eye in first person
   SC.camPos.lerp(want, k); SC.camLook.lerp(look, k);
   cam.position.copy(SC.camPos); cam.lookAt(SC.camLook);
 }

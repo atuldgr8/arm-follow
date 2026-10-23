@@ -7,6 +7,16 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.11 (24 Oct)
+
+- **Bending holds your place** (Tracking, on): while your torso leans forward (from about 12°, fully by 27°), your place on the floor holds where it was when you were last upright. Bending can't move your feet, but it hides and squashes the body in the picture and the guesses about where you are go wild (in Atul's log: up to 0.5 m forward/back and a 0.6 m sideways flip). Replaying that log, the place now stays put through every bend.
+- **Camera tilt** (Tracking, on): a tilted camera (laptop lid leaned back, or a camera mounted high and angled down) made the body lean. People mostly stand upright, so the average lean of a standing torso is the camera's tilt: it's measured slowly while you're upright and taken off the body. Only the body is straightened; the picture isn't changed, so feet and everything else are tracked as before. Tested with a simulated camera at 1.8 m tilted 30° down: tilt measured as 30°, body upright, distances right. The stats line shows the lean and the camera tilt.
+- **Raise both hands** (Tracking, on): hold both hands above your head for about a second: start measuring the floor; again: done; again (P1): START. A big cue on screen says what's next, with a bar that fills while you hold.
+- **Rooms of different sizes, smaller room:** in the bigger room the patch now sits at the back of the measured floor (further from the camera = more of the body in the picture), not the middle.
+- **Quicker hands** (Tracking, on): elbows, wrists and hands are smoothed less, so they keep up with fast moves.
+- **First person near the cube** is steadier: it follows a calmed copy of the head and looks at a calmed target.
+- Stats never run under the camera view; the stats line says whether MediaPipe runs on the GPU or fell back to the CPU.
+
 ## v1.10.2 fix (23 Oct, from Atul's log)
 
 - **The maquette froze on the first frame** (and so the floor never grew while measuring): on a real laptop a new camera picture arrives on every screen frame, and the glide between pictures was timed from "now", so it restarted at 0% every frame. The main build found and fixed exactly this in V13.1 (time the glide from the frame the body was last drawn); now Arm Follow does the same. Found by replaying Atul's recorded tracking the way a real laptop runs it.

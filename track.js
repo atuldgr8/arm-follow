@@ -66,6 +66,10 @@ const SET = {
   depthDrift: 0.5,       // how much stepping toward/away from the camera counts in the drift (leaning in to reach looks like a step)
   netSmooth: 60,         // P2's laptop: how far behind (ms) it shows P1's world, so it moves smoothly instead of in jumps
   // ---- debug ----
+  tiltFix: true,         // measure the camera's tilt (laptop lid, a camera mounted high) and stand the body upright
+  bendHold: true,        // while you bend, your place on the floor holds still (bending can't move your feet)
+  gestures: true,        // raise both hands: start/finish measuring the floor, then START
+  quickHands: true,      // elbows, wrists and hands are smoothed less, so they keep up with fast moves
   hud: true, pip: true, pipRaw: false,   // pipRaw: the raw detection faintly under the smoothed skeleton   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
   calUse: 'both',        // the measured floor sets: 'both' | 'gain' (walk gain only) | 'cubes' (where cubes appear only)
@@ -225,7 +229,7 @@ async function startMediaPipe(deviceId) {
     let model = SET.mpModel === 'full' ? 'pose_landmarker_full/float16/1/pose_landmarker_full.task' : 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
     let make = (d, n) => PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/' + model, delegate: d },
       runningMode: 'VIDEO', numPoses: n, minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.3 });
-    let either = async (mk, n) => { try { return await mk('GPU', n); } catch (e) { return await mk('CPU', n); } };
+    let either = async (mk, n) => { try { let r = await mk('GPU', n); MP.delegate = 'GPU'; return r; } catch (e) { MP.delegate = 'CPU (GPU failed)'; return await mk('CPU', n); } };
     let split = SET.mpSplit && SET.spaces === 1 && SET.comp === 'off';
     if (split) {
       MP.halves = [await either(make, 2), await either(make, 2)];   // 2 per half, so a passer-by can't take your place
@@ -301,7 +305,7 @@ function processFound(found, now, W, H) {
   // then the followed people: filtered in the picture, and built into metres
   let picked = pickPeople(list, now);
   for (let k in picked) { let c = picked[k]; setPerson(+k, null, buildPerson(+k, c, now, W, H, fpx, tanH, sx), now, 'glide'); }
-  TRK.status = 'MediaPipe: ' + list.length + ' tracked' + (MP.hands ? ' · ' + MP.handsFound.length + ' hands' : '');
+  TRK.status = 'MediaPipe' + (MP.delegate ? ' on ' + MP.delegate : '') + ': ' + list.length + ' tracked' + (MP.hands ? ' · ' + MP.handsFound.length + ' hands' : '');
 }
 
 // ---------------- one followed person, from the camera picture ----------------
@@ -329,14 +333,41 @@ function solvePlace(lm, wl, W, H, f) {
   return { x: det(col(0)) / D, y: det(col(1)) / D, z: det(col(2)) / D };
 }
 const MPF = {};   // per slot: the One Euro filters for the picture points and the 3D points, and a little memory
+const QUICK = new Set([13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);   // elbows, wrists, hands
 function filterPts(arr, store, t, scale, withZ, fz) {
   return arr.map((q, i) => {
     if (!q) return q;
     let f = store[i] || (store[i] = { x: new OneEuro(), y: new OneEuro(), z: new OneEuro() });
-    return { x: f.x.filter(q.x * scale.x, t, fz.minC, fz.beta) / scale.x, y: f.y.filter(q.y * scale.y, t, fz.minC, fz.beta) / scale.y,
-      z: withZ ? f.z.filter(q.z * scale.x, t, fz.minC, fz.beta) / scale.x : q.z, visibility: q.visibility };
+    // hands move fast: smoothed less when still, and much less when moving, so they keep up
+    let mc = fz.minC, b = fz.beta;
+    if (SET.quickHands && QUICK.has(i)) { mc *= 1.6; b *= 3; }
+    return { x: f.x.filter(q.x * scale.x, t, mc, b) / scale.x, y: f.y.filter(q.y * scale.y, t, mc, b) / scale.y,
+      z: withZ ? f.z.filter(q.z * scale.x, t, mc, b) / scale.x : q.z, visibility: q.visibility };
   });
 }
+// RAISE BOTH HANDS (both wrists above your head, held a moment): from across the room, start or finish
+// measuring the floor, and then START. Hands have to come down again before it counts again.
+const GEST = { since: 0, armed: true, k: 0, slot: 0 };
+function gestureTick(slot, lm, now) {
+  if (!SET.gestures || typeof RUN === 'undefined' || !calSlots().includes(slot)) return;
+  let active = CAL.active || RUN.phase === 'setup';
+  let ok = q => q && (q.visibility === undefined || q.visibility > 0.5);
+  let up = active && [15, 16].every(i => ok(lm[i]) && ok(lm[0]) && lm[i].y < lm[0].y - 0.03);
+  if (!up) { if (GEST.slot === slot) { GEST.since = 0; GEST.k = 0; GEST.armed = true; } return; }
+  GEST.slot = slot;
+  if (!GEST.armed) return;
+  if (!GEST.since) GEST.since = now;
+  GEST.k = clamp((now - GEST.since) / 900, 0, 1);
+  if (GEST.k >= 1) { GEST.armed = false; GEST.since = 0; GEST.k = 0; gestureAction(); }
+}
+function gestureAction() {
+  if (CAL.active || (RUN.phase === 'setup' && !calStepDone())) { calibrate(); logEvent('gesture', { what: 'calibrate' }); return; }
+  let b = document.getElementById('f-start');
+  if (RUN.phase === 'setup' && b && !b.disabled && !isGuest()) { startRun(); logEvent('gesture', { what: 'start' }); }
+}
+// the camera's tilt (radians; + = looking down), measured from people standing upright
+const CAMT = { pitch: 0, n: 0 };
+const rotX = (v, a) => { let c = Math.cos(a), s = Math.sin(a); return { x: v.x, y: v.y * c - v.z * s, z: v.y * s + v.z * c, visibility: v.visibility }; };
 function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, arm: {} });
   let t = now / 1000, fz = feelPx();
@@ -345,50 +376,67 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let sImg = vmid(lm[11], lm[12]), hImg = vmid(lm[23], lm[24]);
   let sW = vmid(wl[11], wl[12]), hW = vmid(wl[23], wl[24]);
 
-  // HOW FAR AWAY, from the upper body (no legs needed). The body model knows the real size of your torso
-  // and shoulders (in metres, the way the camera sees them, so a torso tipped toward the camera is shorter
-  // in metres AND in the picture); real size ÷ size in the picture = distance. Two measures, because
-  // bending shortens the torso but not the shoulders, and turning narrows the shoulders but not the torso;
-  // each counts by how big it looks (bigger = more reliable).
+  // CAMERA TILT. The body model's 3D points are as the camera sees them, so a tilted camera (a laptop
+  // lid leaned back, a camera mounted high and angled down) shows an upright person leaning. People
+  // mostly stand upright, so the average lean of a standing torso IS the camera's tilt: it's measured
+  // slowly, while you're roughly upright, and taken off the body (the picture itself isn't changed, so
+  // the feet and everything else are still tracked as before).
+  let tv = vsub(sW, hW), tl = vlen(tv), sample = Math.atan2(-tv.z, -tv.y);
+  let lean0 = Math.abs(sample - CAMT.pitch) * 180 / Math.PI;
+  if (SET.tiltFix && tl > 0.25 && Math.abs(sample) < 0.8) {
+    if (CAMT.n < 30) { CAMT.pitch += (sample - CAMT.pitch) / (CAMT.n + 1); CAMT.n++; }
+    else if (lean0 < 15) CAMT.pitch += (sample - CAMT.pitch) * 0.01;
+  }
+  let pitch = SET.tiltFix ? CAMT.pitch : 0;
+  let wlU = wl.map(q => rotX(q, -pitch));                // the body, stood upright
+  let sU = vmid(wlU[11], wlU[12]), hU = vmid(wlU[23], wlU[24]), tvU = vsub(sU, hU);
+  let lean = Math.acos(clamp(-tvU.y / Math.max(0.05, vlen(tvU)), -1, 1)) * 180 / Math.PI;   // 0 = upright
+
+  // HOW FAR AWAY, from the upper body (no legs needed): a fallback for when the body-shape fit fails.
   let torsoPx = Math.max(8, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
   let shPx = Math.max(8, Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H));
   let torsoM = Math.hypot(sW.x - hW.x, sW.y - hW.y), shM = Math.hypot(wl[11].x - wl[12].x, wl[11].y - wl[12].y);
   let dTo = fpx * clamp(torsoM, 0.1, 0.7) / torsoPx, dSh = fpx * clamp(shM, 0.08, 0.5) / shPx;
-  // those say how far your shoulders (and the middle of your torso) are; when you bend or lean, they
-  // come toward the camera while your hips stay put. The body model knows how far forward your
-  // shoulders are from your hips, so take that off: what's left is where your hips (you) are.
   let fwd = clamp(sW.z - hW.z, -0.6, 0.6);
   dTo -= fwd / 2; dSh -= fwd;
   let dU = clamp((dTo * torsoPx + dSh * shPx) / (torsoPx + shPx), 0.6, 8);
-  let d = dU, latX = hImg.x, src = 'upper body';
+  let d = dU, lat = (hImg.x - 0.5) * 2 * dU * tanH, src = 'upper body';
   // BETTER, when it solves: the body model gives your body's 3D shape in metres (centred on your hips);
   // find where that shape has to stand so its picture lands exactly where the camera saw you. Every
-  // visible point votes, so bending, turning and reaching all fit the same shape (the standard way to
-  // place a known 3D shape from one picture, with the camera's field of view).
+  // visible point votes (the standard way to place a known 3D shape from one picture). With a tilted
+  // camera, the distance along the floor is taken out of that.
   let T = solvePlace(lm, wl, W, H, fpx);
-  if (T && T.z > 0.5 && T.z < 8) { d = clamp(T.z, 0.6, 8); latX = 0.5 + T.x * fpx / (T.z * W); src = 'body shape'; }
-  let dB = d;   // the body's own estimate (no feet)
+  if (T && T.z > 0.5 && T.z < 8) { d = clamp(T.z * Math.cos(pitch) - T.y * Math.sin(pitch), 0.6, 8); lat = T.x; src = 'body shape'; }
+  let dB = d, latB = lat;
 
-  // FEET, a bonus when they're in the picture and the floor was measured (this version's measurement):
-  // where your feet meet the floor in the picture says the distance, unaffected by bending.
+  // FEET, a bonus when they're in the picture and the floor was measured (this version's measurement).
   // The two are kept in step, so nothing jumps when your feet come into or leave the picture.
   let r = CAL.rect, ankL = lm[27], ankR = lm[28];
   let feetSeen = [ankL, ankR].every(q => q && (q.visibility === undefined || q.visibility > 0.6) && q.y < 0.98);
   if (M.kF === undefined) M.kF = 1;
   if (r && r.v === 2 && r.fa !== undefined && feetSeen && !CAL.active) {
     let ay = Math.max(ankL.y, ankR.y), dF = ay - r.fa > 0.01 ? r.fb / (ay - r.fa) : 0, k = dF / dB;
-    if (k > 0.6 && k < 1.6) { d = dF; latX = (ankL.x + ankR.x) / 2; src = 'feet'; M.kF += (k - M.kF) * 0.05; }
+    if (k > 0.6 && k < 1.6) { d = dF; lat = ((ankL.x + ankR.x) / 2 - 0.5) * 2 * dF * tanH; src = 'feet'; M.kF += (k - M.kF) * 0.05; }
     else src += ' (feet disagree: measure the floor again)';
   }
-  if (src !== 'feet') d = clamp(dB * M.kF, 0.6, 8);
+  if (src !== 'feet') { d = clamp(dB * M.kF, 0.6, 8); lat = latB * M.kF; }
 
-  // a calm filter on where you stand (it's multiplied by the walk gain, so its wobble would be too):
-  // still when you stand still, follows when you walk
-  let fr = feelRoot(), lat0 = (latX - 0.5) * 2 * d * tanH;
+  // BENDING. Bending over can't move your feet, but it hides and squashes the body in the picture, and
+  // the guesses about where you are go wild. So while your torso leans forward (from about 12°, fully by 27°), your place on the
+  // floor holds where it was when you were last upright (eased in and out; let go after 8 s, in case).
+  M.bendT = lean > 12 ? (M.bendT || 0) + (M.lastT ? t - M.lastT : 0) : 0; M.lastT = t;
+  let w = SET.bendHold ? smooth01((lean - 12) / 15) * (M.bendT < 8 ? 1 : 0) : 0;   // upright reads 0–8°; a bend, 15° and up
+  if (w < 0.01 || !M.hold) M.hold = { d: M.d !== null && M.d !== undefined ? M.d : d, lat: M.latS !== undefined ? M.latS : lat };
+  let dIn = d + (M.hold.d - d) * w, latIn = lat + (M.hold.lat - lat) * w;
+  if (w >= 0.01) src += ' · bending, held';
+
+  // a calm filter on where you stand (it's multiplied by the walk gain, so its wobble would be too)
+  let fr = feelRoot();
   M.fd = M.fd || new OneEuro(); M.fl = M.fl || new OneEuro();
-  let dS = M.fd.filter(d, t, fr.minC, fr.beta), latS = M.fl.filter(lat0, t, fr.minC * 1.5, fr.beta);
-  M.d = dS; M.src = src; M.dU = dU; M.T = T; M.raw = d;
+  let dS = M.fd.filter(dIn, t, fr.minC, fr.beta), latS = M.fl.filter(latIn, t, fr.minC * 1.5, fr.beta);
+  M.d = dS; M.latS = latS; M.src = src; M.dU = dU; M.T = T; M.raw = d; M.lean = lean; M.pitch = pitch;
   let pel = V(sx * latS, 0.95, dS);
+  sW = sU; hW = hU; let wlC = wl; wl = wlU;   // from here on, the upright body
   let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
   let j = { pelvis: pel };
   for (let n in MPJ) { j[n] = A(wl[MPJ[n]]); }
@@ -409,10 +457,11 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
       for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
         let ia = MPJ[a + s], ib = MPJ[b + s];
         let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
-        let wv = vsub(wl[ib], wl[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
+        let wv = vsub(wlC[ib], wlC[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
         let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
         let sign = wv.z < 0.02 ? -1 : 1;   // usually reaching forward (toward the camera)
-        let nb = V(j[a + s].x + sx * px, j[a + s].y - py, j[a + s].z + sign * dz), shift = vsub(nb, j[b + s]);
+        let cv = rotX({ x: px, y: py, z: sign * dz }, -pitch);   // as the camera sees it → stood upright
+        let nb = V(j[a + s].x + sx * cv.x, j[a + s].y - cv.y, j[a + s].z + cv.z), shift = vsub(nb, j[b + s]);
         j[b + s] = nb;
         for (let c2 of (b === 'el' ? ['wr', 'in', 'pi', 'th'] : ['in', 'pi', 'th'])) { j[c2 + s] = vadd(j[c2 + s], shift); }
       }
@@ -420,6 +469,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
     if (!lost) { mem.rel = {}; for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { mem.rel[c2] = vsub(j[c2 + s], j['sh' + s]); } mem.t = now; }
   }
   j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
+  gestureTick(slot, lm, now);
   return { key: null, j, chir: c.chir, lm: c.lm, lmS: lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: dS, distT: dB };
 }
 // give each hand the hand model found to the nearest wrist the body model found

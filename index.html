@@ -40,11 +40,15 @@
     #prompt.held { background: #2F5BFF; border-color: #2F5BFF; color: #fff; }
     #prompt.apart { background: #FF5A1F; border-color: #FF5A1F; color: #fff; }
     #waiting { position: absolute; top: 46%; width: 100%; text-align: center; font-size: 15px; color: var(--ink2); pointer-events: none; }
-    #stats { position: absolute; left: 12px; bottom: 12px; font: 11px/1.45 var(--mono); color: var(--ink); background: rgba(255,255,255,0.88); border: 1px solid var(--edge); padding: 9px 11px; border-radius: 12px; white-space: pre; pointer-events: none; max-width: calc(100% - 40px); overflow: hidden; }
+    #stats { position: absolute; left: 12px; bottom: 12px; white-space: pre-wrap !important; word-break: break-word; font: 11px/1.45 var(--mono); color: var(--ink); background: rgba(255,255,255,0.88); border: 1px solid var(--edge); padding: 9px 11px; border-radius: 12px; white-space: pre; pointer-events: none; max-width: calc(100% - 40px); overflow: hidden; }
     #pip { position: absolute; right: 14px; bottom: 14px; pointer-events: none; display: none; border-radius: 14px; box-shadow: 0 0 0 1px var(--edge), 0 8px 24px rgba(0,0,0,0.08); }
     #edge { position: absolute; top: 146px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid #2F5BFF; color: #2F5BFF; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; pointer-events: none; display: none; }
-    #calib { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(247,247,245,0.7); pointer-events: none; text-align: center; }
-    #calib .big { font-size: 22px; letter-spacing: 5px; color: var(--ink); } #calib .small { font-size: 13px; color: var(--ink2); margin-top: 12px; line-height: 1.7; }
+    /* the big cue, readable from across the room: what to do next (raise both hands…) */
+    #calib { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; pointer-events: none; text-align: center; background: rgba(255,255,255,0.92); border: 1px solid var(--edge); border-radius: 22px; padding: 22px 34px 20px; z-index: 6; box-shadow: 0 12px 40px rgba(0,0,0,0.08); }
+    #calib .big { font-size: clamp(26px, 3.6vw, 52px); letter-spacing: 4px; color: var(--ink); font-weight: 500; }
+    #calib .small { font-size: clamp(14px, 1.5vw, 20px); color: var(--ink2); margin-top: 10px; line-height: 1.5; }
+    #calib .gbar { width: 260px; height: 6px; border-radius: 3px; background: var(--field); margin-top: 14px; overflow: hidden; }
+    #calib .gbar div { height: 100%; width: 0; background: var(--ink); }
     #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 15px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 6; }
     /* ---- the start flow (on the stage) ---- */
     #flow { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(540px, 92%); background: var(--card); border: 1px solid var(--edge); border-radius: 18px; padding: 16px 18px 14px; font-size: 13px; line-height: 1.5; display: none; z-index: 5; counter-reset: step; box-shadow: 0 12px 36px rgba(0,0,0,0.07); }
@@ -162,7 +166,7 @@
         <div class="fsub dim center" id="f-start-note"></div>
         <div id="f-wait">Waiting for P1 to press START…</div>
       </div>
-      <div id="calib"><div class="big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div></div>
+      <div id="calib"><div class="big" id="calib-big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div><div class="gbar"><div id="calib-g"></div></div></div>
       <canvas id="pip"></canvas>
       <div id="stats"></div>
       <div id="toast"></div>
@@ -190,6 +194,10 @@
           </div>
           <div class="f"><label>Feel: responsive ⟷ smooth<span class="val" id="val-feel"></span></label><input type="range" id="feel" min="0" max="1" step="0.05"></div>
           <button class="sw" id="btn-mirror" title="Flip the picture like a mirror"></button>
+ <button class="sw" id="btn-gest" title="Raise both hands above your head for a moment: start measuring the floor, finish measuring, then START. Handy when the camera is across the room from the laptop."></button>
+          <button class="sw" id="btn-tilt" title="Measures how tilted the camera is (a laptop lid leaned back, or a camera mounted high and angled down) from you standing upright, and stands the body upright. Feet and everything else are still tracked as before."></button>
+          <button class="sw" id="btn-bend" title="While you bend over, your place on the floor holds still. Bending can't move your feet, but it confuses the tracking about where you are."></button>
+          <button class="sw" id="btn-qhands" title="Elbows, wrists and hands are smoothed less, so they keep up with quick moves (a little more shake when still)."></button>
           <button class="sw" id="btn-pipraw" title="In the camera view, the raw detection faintly under the smoothed skeleton the game uses"></button>
           <div class="cond" id="g-comp" data-why="Computer partner · needs the webcam">
           <div class="f"><label>Computer partner<span class="tip" title="For testing alone. As P2 it walks after you, late and no faster than its top speed, so walking briskly leaves the arm behind; its arms copy yours, late. As P1 it walks the body to the cube by itself.">ⓘ</span></label><select id="comp"><option value="off">Off</option><option value="P2">Computer plays P2 (you own the body)</option><option value="P1">Computer plays P1 (you are the arm)</option></select></div>
@@ -334,7 +342,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.10.2 · 23 Oct 14:50'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.11 · 24 Oct 02:30'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

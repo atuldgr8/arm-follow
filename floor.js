@@ -94,7 +94,9 @@ function usable(slot) {
   if (SET.spaces === 2 && SET.roomFit === 'smaller') {
     let o = rectOf(3 - slot);
     if (o) {
-      let w = Math.min(rectW(r), rectW(o)), d = Math.min(rectD(r), rectD(o)), cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+      // the patch sits where this camera sees the whole body best: toward the back of the floor
+      // (further from the camera = more of you in the picture), centred left to right
+      let w = Math.min(rectW(r), rectW(o)), d = Math.min(rectD(r), rectD(o)), cx = (r.x0 + r.x1) / 2, cz = r.z1 - d / 2;
       return { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 };
     }
   }
