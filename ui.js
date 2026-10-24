@@ -208,7 +208,7 @@ function setupPanel() {
   tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
   sl('fov', 'fov', v => v + '°'); sl('stillz', 'stillZone', v => v === 0 ? 'off' : 'ignore under ' + Math.round(v * 100) + ' cm'); sl('feel', 'smooth', v => v.toFixed(2));
-  sel('reach', 'reach'); sel('ghost', 'ghost'); tog('btn-warmup', 'warmup', () => { if (!isGuest()) restartWorld(); }); tog('btn-thread', 'thread'); tog('btn-fpnear', 'fpNear');
+  sel('reach', 'reach'); sel('ghost', 'ghost'); tog('btn-warmup', 'warmup', () => { if (!isGuest()) restartWorld(); }); tog('btn-thread', 'thread'); tog('btn-fpnear', 'fpNear'); tog('btn-rlock', 'reachLock'); tog('btn-solid', 'solid'); tog('btn-seecube', 'seeThroughCube');
   sl('ddrift', 'depthDrift', v => v === 0 ? 'not at all' : v === 1 ? 'fully' : Math.round(v * 100) + '%');
   sl('assist', 'assist', v => v === 0 ? 'off' : v.toFixed(2)); sl('ebuf', 'edgeBuffer', v => Math.round(v * 100) + ' cm'); sl('netsm', 'netSmooth', v => v + ' ms');
   sl('cdelay', 'compDelay', v => v.toFixed(2) + ' s'); sl('cspeed', 'compSpeed', v => v.toFixed(2) + ' m/s');
@@ -259,7 +259,7 @@ function updatePanel() {
   set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
-  set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear);
+  set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +

@@ -17,7 +17,7 @@ const SET = {
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)
   phoneIP: '',           // the address the Body Stream app shows
-  mirror: true, smooth: 0.5, solo: false,
+  mirror: true, smooth: 1.0, solo: false,   // smooth 1.0: Atul's pick after testing (25 Oct)
   reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
   mpSplit: true,         // 1 space: look for one person in each half of the picture
   mpModel: 'lite',       // 'lite' | 'full'
@@ -48,12 +48,15 @@ const SET = {
   // ---- picking up ----
   holders: 'any',        // 'any' hand | 'possessed' hands only
   grip: 'touch',         // 'squeeze' | 'palm' (palm facing) | 'touch' (just touching) | 'dwell'
-  assist: 0.6,           // near the cube, hands are drawn onto its sides (0 = off)
+  assist: 0.85,          // near the cube, hands are drawn onto its sides (0 = off)
   edgeBuffer: 0.45,      // new cubes stand at least this far (m) inside your measured floor, so your reach stays in the camera
   touch: 0.08,           // how close a palm has to be to count as touching (m)
   armsOnly: false,       // ARMS ONLY: the body stays put, no falling off, no tasks: just your arms (and P2's), to feel the tracking
   armsView: 'first',     // arms only, the view: 'first' (from your eyes, looking at your hands) | 'mirror' (facing you) | 'side'
   warmup: false,         // an optional warm-up first: lift one cube above the waist and hold it; then the game (carry it to the other plinth)
+  reachLock: true,       // near the cube (and near the plinth while holding it), your place in the room holds still: only a real step away lets go
+  solid: true,           // you can't walk through the cube or the plinths
+  seeThroughCube: true,  // the held cube turns see-through, so you can see where to set it down
   fpNear: true,          // the view switches to first person near the cube, and again near the plinth to set it down on
   thread: true,          // a thread from the fallen arm to the body's shoulder
   holdTime: 2,           // seconds above the waist to finish
@@ -74,7 +77,7 @@ const SET = {
   tiltFix: true,         // measure the camera's tilt (laptop lid, a camera mounted high) and stand the body upright
   bendHold: true,        // while you bend, your place on the floor holds still (bending can't move your feet)
   gestures: true,        // raise both hands: start/finish measuring the floor, then START
-  quickHands: true,      // elbows, wrists and hands are smoothed less, so they keep up with fast moves
+  quickHands: false,     // elbows, wrists and hands are smoothed less, so they keep up with fast moves
   hud: true, pip: true, pipRaw: false,   // pipRaw: the raw detection faintly under the smoothed skeleton   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
   calUse: 'both',        // the measured floor sets: 'both' | 'gain' (walk gain only) | 'cubes' (where cubes appear only)

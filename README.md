@@ -7,6 +7,16 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.14 (25 Oct): steadier near the cube, solid plinths, see-through cube
+
+From Atul's test of v1.13.1:
+
+- **New defaults** (his picks): Feel at full smoothness (1.0), Quicker hands off, hand assist 0.85.
+- **Hold my place while reaching:** within reach of the cube (or of the plinth while holding it), small shifts, leaning in and the camera's wobble are ignored and only your arms move. A deliberate step (about 12 cm of real floor) still moves you. Webcam and iPhone only.
+- **Solid plinths:** you can't walk into a plinth or the cube on it; you slide along its sides.
+- **See-through cube when held,** so you can see the plinth to set it down on.
+- All three are switches (Task section).
+
 ## v1.13.1 (25 Oct): standing still stays still
 
 - The guess of where you stand wandered 1–2 cm (more in depth) even when you didn't move, and the walk gain doubled it, so the maquette drifted about constantly. Now a soft dead zone ignores wobbles under 2.5 cm (4 cm in depth); a real step still moves the body. Slider: Tracking → Standing still stays still (0 = off).

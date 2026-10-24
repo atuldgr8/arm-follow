@@ -66,6 +66,8 @@ function composeAvatar(dt) {
   let pyT = 0.075 - Math.min(legs.L.an.y, legs.R.an.y);
   AV.py = AV.ok ? AV.py + (pyT - AV.py) * Math.min(1, dt * 8) : pyT;
   let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(pel.x, pel.z);   // your real floor position, in the room (floor.js); arms only: stays put
+  vp = reachHold(vp);
+  if (SET.solid && !SET.armsOnly) vp = solidPush(vp);
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
   AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), shL: W(rel('shL')), shR: W(rel('shR')),
@@ -74,6 +76,35 @@ function composeAvatar(dt) {
   AV.frame = { X: unturn(F.X), Y: unturn(F.Y), Z: unturn(F.Z) };
   AV.yaw = yawC;
   AV.ok = true;
+}
+
+// SOLID: the plinths (and the cube on them) can't be walked into. A body is about 30 cm around the
+// middle, so it's kept that far from a plinth's sides and slides along them.
+function solidPush(vp) {
+  let r = PLINTH.w / 2 + 0.3, x = vp.x, z = vp.z;
+  for (let P of TARGET.on ? [PLINTH.p, TARGET.p] : [PLINTH.p]) {
+    let dx = x - P.x, dz = z - P.z;
+    if (Math.abs(dx) < r && Math.abs(dz) < r) {   // inside: out by the shortest way
+      if (r - Math.abs(dx) < r - Math.abs(dz)) x = P.x + Math.sign(dx || 1) * r; else z = P.z + Math.sign(dz || 1) * r;
+    }
+  }
+  return { x, z };
+}
+// REACHING HOLDS YOUR PLACE (a game-like cut): within reach of the cube, or of the plinth while you hold
+// it, the body ignores your small shifts (leaning in, swaying, the camera's wobble) and only your arms
+// move. A deliberate step still moves you: anything beyond the hold zone (about 12 cm of real floor at
+// the usual walk gain) pushes the body along. Webcam/iPhone people only (the demo walks exactly).
+const RLOCK = { on: false, at: null };
+function reachHold(vp) {
+  if (!SET.reachLock || SET.armsOnly || !AV.ok || SET.source !== 'mediapipe') { RLOCK.on = false; return vp; }
+  let goal = CUBE.held ? (TARGET.on ? TARGET.p : null) : CUBE.c;
+  let d = goal ? Math.hypot(goal.x - AV.root.x, goal.z - AV.root.z) : 99;
+  if (!RLOCK.on && d < 0.9 && !CUBE.vanish) { RLOCK.on = true; RLOCK.at = { x: AV.root.x, z: AV.root.z }; logEvent('reach hold', { on: true }); }
+  if (RLOCK.on && d > 1.25) { RLOCK.on = false; logEvent('reach hold', { on: false }); }
+  if (!RLOCK.on) return vp;
+  let zone = 0.25, ex = vp.x - RLOCK.at.x, ez = vp.z - RLOCK.at.z, e = Math.hypot(ex, ez);
+  if (e > zone) { let k = 1 - zone / e; RLOCK.at.x += ex * k; RLOCK.at.z += ez * k; }
+  return { x: RLOCK.at.x, z: RLOCK.at.z };
 }
 
 // where an arm would be if it were attached: P1's shoulder, the driver's arm directions

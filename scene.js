@@ -201,6 +201,8 @@ function sceneRender(S, dt) {
   P.cube.position.copy(fromArr(S.cube.c)); P.cube.rotation.set(0, S.cube.yaw, 0);
   let pop = S.cube.appear > 0 ? 1 - S.cube.appear : 1;
   P.cube.scale.setScalar(Math.max(0.01, S.cube.s * (0.6 + 0.4 * smooth01(pop))));
+  { let m = P.cube.material, op = SET.seeThroughCube && S.cube.held ? 0.35 : 1;
+    if (Math.abs(m.opacity - op) > 0.01) { m.opacity += (op - m.opacity) * 0.2; let t = m.opacity < 0.99; if (m.transparent !== t) { m.transparent = t; m.depthWrite = !t; m.needsUpdate = true; } } }
   P.cube.material.emissive.setRGB(0.35 * S.hud.flash + 0.12 * S.hud.hold, 0.28 * S.hud.flash + 0.1 * S.hud.hold, 0.05 * S.hud.flash);
   // soft shadows: under the body, and P2's while the arm is off (walk yours under the body)
   P.bodyShadow.position.set(b.pelvis.x, 0.004, b.pelvis.z); P.bodyShadow.rotation.z = -S.yaw * Math.PI / 180;
