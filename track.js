@@ -15,6 +15,8 @@
 const SET = {
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
+  tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)
+  phoneIP: '',           // the address the Body Stream app shows
   mirror: true, smooth: 0.5, solo: false,
   reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
   mpSplit: true,         // 1 space: look for one person in each half of the picture
@@ -754,11 +756,12 @@ let demoLast = 0;
 function setSource(src, deviceId) {
   SET.source = src;
   people[1] = null; people[2] = null; DEMO.reset = true; COMP.hist = []; COMP.x = null;
-  if (src === 'mediapipe') startMediaPipe(deviceId);
-  else { stopMediaPipe(); TRK.status = 'demo people'; }
+  if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone(); }
+  else if (src === 'mediapipe') { stopPhone(); startMediaPipe(deviceId); }
+  else { stopMediaPipe(); stopPhone(); TRK.status = 'demo people'; }
 }
 function trackTick(now, dt) {
-  if (SET.source === 'mediapipe') { try { mpTick(now); } catch (e) { TRK.status = 'MediaPipe error: ' + e.message; } compTick(now, dt); }
+  if (SET.source === 'mediapipe') { try { if (SET.tracker === 'iphone') phoneTick(now); else mpTick(now); } catch (e) { TRK.status = 'MediaPipe error: ' + e.message; } compTick(now, dt); }
   else if (now - demoLast > 30) {
     let ddt = Math.min(0.1, (now - (demoLast || now)) / 1000); demoLast = now;
     let ppl = demoPeople(now, ddt);

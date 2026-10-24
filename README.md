@@ -7,6 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.13 (25 Oct): an iPhone as the tracker
+
+- **Tracking → Tracker → iPhone (Body Stream app).** The new iPhone app in `iphone/` sends Apple's body tracking (real depth from the LiDAR, gravity-aligned) over Wi-Fi. Arms swung back read as back. Setup in `iphone/README.md`.
+- The camera view shows the phone's picture with the skeleton. Each laptop chooses its own tracker (P1 iPhone, P2 webcam is fine).
+- Tested here against a stand-in phone (a swinging arm, forward and back): followed both ways. Not yet run on a real iPhone.
+
 ## v1.12.2 (25 Oct): arms hang straight at rest
 
 From Atul's second log of the night (Arms only, C920):

@@ -85,14 +85,17 @@ const PIP_BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [15, 17], [
 const HAND_BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
 function pipStep() {
   let c = $('pip'); c.style.display = SET.pip ? 'block' : 'none'; if (!SET.pip) return;
-  let cam = SET.source === 'mediapipe' && MP.video && MP.video.readyState >= 2;
-  let w = 400, h = cam ? Math.round(w * MP.video.videoHeight / MP.video.videoWidth) : 260;
+  // the picture: the webcam's, or the small one the iPhone sends
+  let pic = SET.source !== 'mediapipe' ? null : phoneOn() ? (PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null)
+    : MP.video && MP.video.readyState >= 2 ? { el: MP.video, w: MP.video.videoWidth, h: MP.video.videoHeight } : null;
+  let cam = !!pic;
+  let w = 400, h = cam ? Math.round(w * pic.h / pic.w) : 260;
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   let x = c.getContext('2d');
   x.clearRect(0, 0, w, h); x.fillStyle = 'rgba(0,0,0,0.7)'; x.fillRect(0, 0, w, h);
   if (cam) {
     x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); }
-    x.drawImage(MP.video, 0, 0, w, h);
+    x.drawImage(pic.el, 0, 0, w, h);
     if (MP.halves) { x.strokeStyle = 'rgba(255,255,255,0.45)'; x.setLineDash([6, 6]); for (let u of [0.4, 0.6]) { x.beginPath(); x.moveTo(u * w, 0); x.lineTo(u * w, h); x.stroke(); } x.setLineDash([]); }
     // which person is which: nearest pelvis in the picture to each slot's last picture
     for (let lm of MP.found || []) {
@@ -111,7 +114,7 @@ function pipStep() {
     }
     // the floor this laptop uses (or the one being measured), outlined on the picture; the centre during the walk to it
     let my = isGuest() ? 2 : 1, fr = CAL.active ? Object.assign({}, CAL.live || {}, { fa: (CAL.rect || {}).fa, fb: (CAL.rect || {}).fb }) : usable(my);
-    if (fr && fr.x0 !== undefined) {
+    if (fr && fr.x0 !== undefined && !phoneOn()) {
       let base = CAL.rect || {}, src = { fa: fr.fa !== undefined ? fr.fa : base.fa, fb: fr.fb !== undefined ? fr.fb : base.fb };
       let pts = [[fr.x0, fr.z0], [fr.x1, fr.z0], [fr.x1, fr.z1], [fr.x0, fr.z1]].map(([px, pz]) => floorToPicture(src, px, pz));
       if (pts.every(q => q)) {
@@ -183,6 +186,10 @@ function setupPanel() {
   $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
   cameraList().then(l => { $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join(''); });
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
+  $('tracker').value = SET.tracker; $('tracker').onchange = e => { SET.tracker = e.target.value; try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {} unlockPeople(); restartTracking(); updatePanel(); };
+  $('phoneip').value = SET.phoneIP;
+  let phoneGo = () => { SET.phoneIP = $('phoneip').value.trim(); try { localStorage.setItem('armfollow.phoneIP', SET.phoneIP); } catch (x) {} if (SET.tracker === 'iphone') restartTracking(); };
+  $('btn-phone').onclick = phoneGo; $('phoneip').onkeydown = e => { if (e.key === 'Enter') phoneGo(); };
   let sel = (id, key, after, num) => { $(id).value = String(SET[key]); $(id).onchange = e => { SET[key] = num ? parseFloat(e.target.value) : e.target.value; if (after) after(); updatePanel(); }; };
   sel('hands', 'hands', restartTracking);
   $('mpsplit').onchange = e => { SET.mpSplit = e.target.value === '1'; restartTracking(); };
@@ -245,6 +252,7 @@ function updatePanel() {
   let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
+  $('tracker').value = SET.tracker; cond('g-phone', SET.tracker === 'iphone'); cond('g-webcam', SET.tracker !== 'iphone');
   quick('btn-pip', SET.pip); quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
@@ -275,7 +283,7 @@ function updatePanel() {
   $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
-  let lock = isGuest(), p2own = ['btn-leave', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
+  let lock = isGuest(), p2own = ['btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
@@ -416,6 +424,7 @@ function frame(now) {
   centreStep(dt); hudStep(S); statsStep(S); pipStep(); flowStep(); logTick(now, S);
 }
 sceneInit($('stage'));
+try { let t = localStorage.getItem('armfollow.tracker'), a = localStorage.getItem('armfollow.phoneIP'); if (t) SET.tracker = t; if (a) SET.phoneIP = a; } catch (e) {}
 setupPanel();
 spawnCube(true);
 setSource(SET.source);
