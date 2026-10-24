@@ -15,7 +15,7 @@ From Atul's test of v1.13.1:
 - **Hold my place while reaching:** within reach of the cube (or of the plinth while holding it), small shifts, leaning in and the camera's wobble are ignored and only your arms move. A deliberate step (about 12 cm of real floor) still moves you. Webcam and iPhone only.
 - **Solid plinths:** you can't walk into a plinth or the cube on it; you slide along its sides.
 - **See-through cube when held,** so you can see the plinth to set it down on.
-- All three are switches (Task section).
+- All three are switches (View section).
 
 ## v1.13.1 (25 Oct): standing still stays still
 
