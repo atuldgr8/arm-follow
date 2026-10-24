@@ -7,6 +7,14 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.12.2 (25 Oct): arms hang straight at rest
+
+From Atul's second log of the night (Arms only, C920):
+
+- **Arms leaned ~20° forward at rest.** The camera-tilt correction was applied to the arms too. The "tilt" is mostly the body model's own habit of reading an upright torso as leaning, and an arm hanging beside you looks straight down in the picture however the camera is tilted. Arms are no longer turned by it: at rest they now hang at 0°.
+- **How much an arm points at the camera** now comes from your arm's remembered length (the longest it has looked lately), the standard single-camera method, instead of the body model's noisier length guess. An arm that looks nearly full length counts as flat.
+- **Limits that remain (the camera, not the code):** one camera can barely tell forward from back. The body model leans toward "forward", and a hand behind your back is mostly hidden from it. Headsets (VR) or a second camera are the real fix.
+
 ## v1.12.1 (25 Oct): the jumping hands, fixed
 
 Found by replaying Atul's log of 24 Oct, frame by frame:

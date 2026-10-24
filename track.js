@@ -463,8 +463,14 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
       for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
         let ia = MPJ[a + s], ib = MPJ[b + s];
         let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
-        let wv = vsub(wlC[ib], wlC[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
-        let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
+        let wv = vsub(wlC[ib], wlC[ia]), pic = Math.hypot(px, py);
+        // HOW MUCH IT POINTS AT THE CAMERA, from how short it looks (the standard single-camera way,
+        // Taylor 2000): your arm's real length is the longest it has looked lately (it creeps back down
+        // slowly, in case that was a misread), and the shorter it looks now, the more it points at you.
+        // An arm that looks nearly full length counts as flat, so a hanging arm doesn't wobble forward.
+        let Lk = 'L' + b, Lm = mem[Lk] === undefined ? Math.max(pic, vlen(wv)) : mem[Lk];
+        Lm += (pic - Lm) * (pic > Lm ? 0.1 : 0.003); Lm = clamp(Lm, 0.18, 0.45); mem[Lk] = Lm;
+        let r = Math.min(1, pic / Lm), dz = Lm * Math.sqrt(1 - r * r) * smooth01((0.97 - r) / 0.12);
         // toward or away from the camera? The picture can't say, so the body model's 3D guess decides. But
         // for an arm hanging or held sideways that guess hovers around zero, and a hard either/or made the
         // elbow and hand flip ~25 cm forward and back every frame or two (v1.9–v1.12, the jumping hands).
@@ -474,7 +480,11 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
         // and up and down stay as quick as the picture
         let zf = mem['z' + b] || (mem['z' + b] = new OneEuro());
         let zc = zf.filter(toward * dz * 1000, t, fz.minC * 0.5, fz.beta) / 1000;
-        let cv = rotX({ x: px, y: py, z: zc }, -pitch);   // as the camera sees it → stood upright
+        // NOT turned by the camera tilt (v1.12.2): an arm hanging beside you looks straight down in the
+        // picture however the camera is tilted, just like your torso. Turning it made every arm lean ~20°
+        // forward at rest, because the "tilt" is mostly the body model's own habit of reading upright as leaning.
+        let cv = { x: px, y: py, z: zc };
+        if (window.ARMDBG) ARMDBG.push([s + b, +pic.toFixed(3), +Lm.toFixed(3), +wv.z.toFixed(3), +dz.toFixed(3), +zc.toFixed(3), +dS.toFixed(2)]);
         let nb = V(j[a + s].x + sx * cv.x, j[a + s].y - cv.y, j[a + s].z + cv.z), shift = vsub(nb, j[b + s]);
         j[b + s] = nb;
         for (let c2 of (b === 'el' ? ['wr', 'in', 'pi', 'th'] : ['in', 'pi', 'th'])) { j[c2 + s] = vadd(j[c2 + s], shift); }
