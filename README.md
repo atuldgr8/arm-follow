@@ -7,6 +7,10 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.12 (24 Oct): Arms only
+
+**Arms only** (quick bar, or A): the body stands still in the middle of the room, nothing falls off, and there's nothing to pick up: just your arms, and P2's possessed arm when linked, to feel how the tracking moves. Three views (View section): **from your eyes, at your hands** (closest to VR), **facing you like a mirror**, or **from the side**. Press A again to go back.
+
 ## v1.11 (24 Oct)
 
 - **Bending holds your place** (Tracking, on): while your torso leans forward (from about 12°, fully by 27°), your place on the floor holds where it was when you were last upright. Bending can't move your feet, but it hides and squashes the body in the picture and the guesses about where you are go wild (in Atul's log: up to 0.5 m forward/back and a 0.6 m sideways flip). Replaying that log, the place now stays put through every bend.

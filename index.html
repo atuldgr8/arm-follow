@@ -77,7 +77,7 @@
     #panel { width: 324px; min-width: 324px; height: 100vh; overflow-y: auto; background: var(--paper); border-left: 1px solid var(--line); padding: 16px 14px 30px; box-sizing: border-box; font-size: 12px; scrollbar-width: thin; }
     #ptitle { font-size: 17px; font-weight: 500; letter-spacing: -0.3px; margin: 2px 4px 12px; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
     #pver { font-size: 10px; font-weight: 400; color: var(--ink3); letter-spacing: 0; }
-    #quick { position: sticky; top: -16px; z-index: 3; background: var(--paper); padding: 6px 0 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    #quick { position: sticky; top: -16px; z-index: 3; background: var(--paper); padding: 6px 0 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
     #quick button { font-size: 11px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 9px; padding: 7px 2px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; transition: border-color 0.15s; }
     #quick button:hover { border-color: var(--edge); }
     #quick button kbd { font: 9px var(--mono); color: var(--ink3); }
@@ -175,7 +175,7 @@
     <div id="panel">
       <div id="ptitle">Arm Follow <span id="pver"></span></div>
       <div id="quick">
-        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera<kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats<kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View<kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo<kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate<kbd>C</kbd></button><button id="btn-setup" title="Back to the start: measure the floor again, or re-pick who's followed">Setup</button><button id="btn-restart">Restart<kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log<kbd>O</kbd></button>
+        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera<kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats<kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View<kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo<kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate<kbd>C</kbd></button><button id="btn-setup" title="Back to the start: measure the floor again, or re-pick who's followed">Setup</button><button id="btn-arms" title="Just your arms (and P2’s possessed arm): the body stays put, nothing falls off, nothing to do. For feeling the tracking.">Arms only<kbd>A</kbd></button><button id="btn-restart">Restart<kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log<kbd>O</kbd></button>
       </div>
       <div class="note" id="lock-all" style="display:none;">Linked as P2: P1’s laptop decides the experience. You can measure your floor, pick your camera, its field of view and mirroring, or disconnect.</div>
       <details data-key="tracking" open style="--tint:#6FC3FF">
@@ -307,6 +307,9 @@
         <summary><span class="ico"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="st">View</span></summary>
         <div class="card">
           <div class="f"><label>View</label><select id="view"><option value="behind">Behind the body (over the shoulder)</option><option value="first">First person (VR preview)</option><option value="orbit">Free orbit (drag)</option></select></div>
+          <div class="cond" id="g-armsview" data-why="Arms-only view · when Arms only is on">
+          <div class="f"><label>Arms only: the view<span class="tip" title="From your eyes looking down at your hands (closest to VR), facing you like a mirror, or from the side.">ⓘ</span></label><select id="armsview"><option value="first">From your eyes, at your hands</option><option value="mirror">Facing you, like a mirror</option><option value="side">From the side</option></select></div>
+          </div>
           <div class="f"><label>The view faces</label><select id="camlock"><option value="forward">Always forward (never turns)</option><option value="cube">Toward the cube (lock-on)</option><option value="turn">Wherever the body faces (slowly)</option></select></div>
           <div class="f"><label>Near the cube, the camera<span class="tip" title="As you get close to the cube (or while holding it) the camera moves in to examine, so you can see where your hands are.">ⓘ</span></label><select id="examine"><option value="high">Moves up and looks down</option><option value="side">Moves to the side</option><option value="front">Moves in front, looking back at you</option><option value="off">Stays put</option></select></div>
           <div class="cond" id="g-exam" data-why="How close · when the camera moves in">
@@ -342,7 +345,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.11 · 24 Oct 02:30'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.12 · 24 Oct 23:45'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

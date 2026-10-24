@@ -11,7 +11,7 @@ const METER_MAX = 1.4;   // the drift meter shows up to 1.4 × the tolerance
 let lastScore = 0;
 function hudStep(S) {
   let h = S && S.hud;
-  $('hud').style.display = h && h.anyP2 && h.p1 && RUN.phase === 'play' ? 'block' : 'none';
+  $('hud').style.display = h && h.anyP2 && h.p1 && RUN.phase === 'play' && !SET.armsOnly ? 'block' : 'none';
   if (!h) { $('waiting').textContent = 'Starting…'; return; }
   let wait = !h.p1 ? 'Waiting for P1' : (h.anyP2 && !h.p2 ? 'Waiting for P2 · the arm has nobody in it' : '');
   $('waiting').textContent = wait;
@@ -23,7 +23,7 @@ function hudStep(S) {
   let ft = $('m-turn').querySelector('.fill'); ft.style.width = (kt * 100) + '%'; ft.style.background = h.turn > h.turnTol ? '#E5372A' : '#1A1A1A';
   $('hud-label').textContent = apart ? 'arm left behind · catch up' : back ? 'coming back' : h.state === 'vacant' ? 'nobody in the arm' : 'together';
   $('hud-label').style.color = apart ? '#E5372A' : '#1A1A1A';
-  $('score').textContent = 'CUBES ' + h.score;
+  $('score').textContent = 'CUBES ' + h.score; $('score').style.display = SET.armsOnly ? 'none' : '';
   if (h.score !== lastScore) { lastScore = h.score; $('score').style.transform = 'scale(1.35)'; setTimeout(() => { $('score').style.transform = ''; }, 260); }
   $('hold').style.opacity = h.hold > 0.01 && h.task !== 'carry' ? 1 : 0;
   let et = edgeText(); $('edge').style.display = et ? 'block' : 'none'; $('edge').textContent = et;
@@ -37,7 +37,7 @@ function hudStep(S) {
   $('hold').querySelector('.fill').style.width = (clamp(h.hold, 0, 1) * 100) + '%';
   // what to do next, in a few words
   let pr = '';
-  if (RUN.phase === 'play' && h.p1) {
+  if (RUN.phase === 'play' && h.p1 && !SET.armsOnly) {
     if (h.state === 'apart') pr = 'P2: walk your shadow under the body';
     else if (h.held && h.task === 'carry') pr = h.nearT < 1.0 ? 'HELD · set it down on the blue-marked plinth' : 'HELD · carry it to the blue-marked plinth →';
     else if (h.task === 'carry' && h.hold > 0) pr = 'placed ✓';
@@ -223,6 +223,8 @@ function setupPanel() {
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
+  $('btn-arms').onclick = toggleArms;
+  $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
   $('btn-restart').onclick = restartAll; $('btn-log').onclick = saveLog; $('btn-viewq').onclick = () => { cycleView(); updatePanel(); };
   // the panel remembers which sections you left open
   document.querySelectorAll('#panel details[data-key]').forEach(d => {
@@ -243,7 +245,7 @@ function updatePanel() {
   let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
-  quick('btn-pip', SET.pip); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
+  quick('btn-pip', SET.pip); quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
   set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
@@ -368,6 +370,14 @@ function flowStep() {
   $('f-start-note').textContent = guest ? '' : ready ? (needsCentre() ? 'After START, both walk onto the ring in the room; it begins once you’re both there.' : '') : 'START unlocks once every step above is done.';
 }
 
+// ARMS ONLY: just your arms (and P2's possessed arm), the body standing still, nothing to do: feel the tracking
+function toggleArms() {
+  if (isGuest()) { toast('P1’s laptop decides this'); return; }
+  SET.armsOnly = !SET.armsOnly;
+  if (SET.armsOnly) { RUN.phase = 'play'; if (SET.view === 'behind') setView('behind'); toast('Arms only: just your arms · A to leave'); }
+  else { toast('Arms only off'); restartWorld(); }
+  updatePanel();
+}
 function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
 
 // ---------------- keys ----------------
@@ -384,6 +394,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'c') calibrate();
   else if (k === 's') { SET.solo = !SET.solo; toast('Solo ' + (SET.solo ? 'on: you are P1 and P2' : 'off')); }
   else if (k === 'o') saveLog();
+  else if (k === 'a') toggleArms();
   else if (k === 'd') SET.hud = !SET.hud;
   else if (k === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
   else return;

@@ -156,7 +156,7 @@ function sceneRender(S, dt) {
   let headC = b.head.clone().addScaledVector(Yv, 0.03);
   seg(P.neck, b.neck, headC, 0.045);
   ball(P.head, headC, 0.1); P.head.scale.set(0.092, 0.112, 0.102);
-  let first = SET.view === 'first';
+  let first = SET.view === 'first' || (S.armsOnly && S.armsView === 'first');
   let hideHead = first || SC.fp > 0.08;   // first person (or the first-person cut near the cube): no head in the way
   P.head.visible = !hideHead; P.neck.visible = !hideHead;
   // legs and feet
@@ -195,7 +195,8 @@ function sceneRender(S, dt) {
 
   // plinth and cube
   P.plinth.position.set(S.plinth[0], PLINTH.h / 2, S.plinth[1]);
-  P.target.visible = !!S.target;
+  P.plinth.visible = !S.armsOnly; P.cube.visible = !S.armsOnly;   // arms only: nothing to pick up
+  P.target.visible = !!S.target && !S.armsOnly;
   if (S.target) { P.target.position.set(S.target[0], PLINTH.h / 2, S.target[1]); P.targetTop.material.opacity = 0.55 + 0.4 * Math.sin(performance.now() / 300) ** 2; }
   P.cube.position.copy(fromArr(S.cube.c)); P.cube.rotation.set(0, S.cube.yaw, 0);
   let pop = S.cube.appear > 0 ? 1 - S.cube.appear : 1;
@@ -314,6 +315,18 @@ function cameraStep(S, dt, b) {
   if (!SC.rootS || SC.rootS.distanceTo(rawRoot) > 2) SC.rootS = rawRoot.clone();
   SC.rootS.lerp(rawRoot, Math.min(1, dt * 3));
   let root = SC.rootS.clone();
+  // ARMS ONLY: a steady view of the arms (from the eyes, facing you like a mirror, or from the side)
+  if (S.armsOnly && SET.view !== 'orbit') {
+    let head = b.head.clone(), chest = b.neck.clone().add(new V3(0, -0.2, 0)), wantA, lookA, fovA = 70;
+    if (SET.armsView === 'first') { wantA = head.clone().add(new V3(0, 0.04, -0.08)); lookA = chest.clone().add(new V3(0, -0.15, -0.9)); fovA = 85; }
+    else if (SET.armsView === 'mirror') { wantA = chest.clone().add(new V3(0, 0.25, -1.9)); lookA = chest.clone(); fovA = 60; }
+    else { wantA = chest.clone().add(new V3(1.9, 0.25, -0.35)); lookA = chest.clone().add(new V3(0, 0, -0.2)); fovA = 60; }
+    if (!SC.armsS || SC.armsS.distanceTo(wantA) > 1.5) { SC.armsS = wantA.clone(); SC.armsL = lookA.clone(); }
+    SC.armsS.lerp(wantA, Math.min(1, dt * 4)); SC.armsL.lerp(lookA, Math.min(1, dt * 4));
+    if (Math.abs(cam.fov - fovA) > 0.05) { cam.fov = fovA; cam.updateProjectionMatrix(); }
+    SC.camPos.copy(SC.armsS); SC.camLook.copy(SC.armsL); SC.fp = 0; SC.exam = 0;
+    cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); return;
+  }
   if (SET.view === 'orbit') {
     SC.controls.target.lerp(root.clone().setY(1.0), Math.min(1, dt * 3));
     SC.controls.update(); return;

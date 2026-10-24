@@ -48,6 +48,8 @@ const SET = {
   assist: 0.6,           // near the cube, hands are drawn onto its sides (0 = off)
   edgeBuffer: 0.45,      // new cubes stand at least this far (m) inside your measured floor, so your reach stays in the camera
   touch: 0.08,           // how close a palm has to be to count as touching (m)
+  armsOnly: false,       // ARMS ONLY: the body stays put, no falling off, no tasks: just your arms (and P2's), to feel the tracking
+  armsView: 'first',     // arms only, the view: 'first' (from your eyes, looking at your hands) | 'mirror' (facing you) | 'side'
   warmup: false,         // an optional warm-up first: lift one cube above the waist and hold it; then the game (carry it to the other plinth)
   fpNear: true,          // the view switches to first person near the cube, and again near the plinth to set it down on
   thread: true,          // a thread from the fallen arm to the body's shoulder
