@@ -300,6 +300,10 @@ function processFound(found, now, W, H) {
   // first, just enough to tell people apart (size and place in the picture)
   for (let { lm, wl } of found) {
     let sImg = vmid(lm[11], lm[12]), hImg = vmid(lm[23], lm[24]);
+    // a body upside down (shoulders below the hips) is the body model misreading a deep bend or a head
+    // leaving the top of the picture, never a real pose here: skip that frame instead of flinging the body
+    let sWy = (wl[11].y + wl[12].y) / 2, hWy = (wl[23].y + wl[24].y) / 2;
+    if (sWy > hWy || sImg.y > hImg.y) { TRK.flipped = (TRK.flipped || 0) + 1; continue; }
     let torsoPx = Math.max(20, Math.hypot((sImg.x - hImg.x) * W, (sImg.y - hImg.y) * H));
     list.push({ key: null, lm, wl, chir, hands: {}, size: torsoPx / H, img: { x: hImg.x, y: hImg.y } });
   }
@@ -461,12 +465,27 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
         let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
         let wv = vsub(wlC[ib], wlC[ia]), L = Math.max(vlen(wv), Math.hypot(px, py), 0.18);
         let dz = Math.sqrt(Math.max(0, L * L - px * px - py * py));
-        let sign = wv.z < 0.02 ? -1 : 1;   // usually reaching forward (toward the camera)
-        let cv = rotX({ x: px, y: py, z: sign * dz }, -pitch);   // as the camera sees it → stood upright
+        // toward or away from the camera? The picture can't say, so the body model's 3D guess decides. But
+        // for an arm hanging or held sideways that guess hovers around zero, and a hard either/or made the
+        // elbow and hand flip ~25 cm forward and back every frame or two (v1.9–v1.12, the jumping hands).
+        // So it's a dimmer, not a switch: clearly forward = full depth forward, unsure = little depth.
+        let toward = clamp(wv.z / 0.08, -1, 1);
+        // depth is the camera's weakest guess, so it gets its own, calmer smoothing (in mm); side to side
+        // and up and down stay as quick as the picture
+        let zf = mem['z' + b] || (mem['z' + b] = new OneEuro());
+        let zc = zf.filter(toward * dz * 1000, t, fz.minC * 0.5, fz.beta) / 1000;
+        let cv = rotX({ x: px, y: py, z: zc }, -pitch);   // as the camera sees it → stood upright
         let nb = V(j[a + s].x + sx * cv.x, j[a + s].y - cv.y, j[a + s].z + cv.z), shift = vsub(nb, j[b + s]);
         j[b + s] = nb;
         for (let c2 of (b === 'el' ? ['wr', 'in', 'pi', 'th'] : ['in', 'pi', 'th'])) { j[c2 + s] = vadd(j[c2 + s], shift); }
       }
+    }
+    // half-seen (hidden behind you, blurred): the body model is guessing, so the arm only moves part of
+    // the way toward the guess; fully seen, it follows completely
+    let vis = Math.min(wr.visibility === undefined ? 1 : wr.visibility, el.visibility === undefined ? 1 : el.visibility);
+    let trust = clamp((vis - 0.3) / 0.4, 0, 1);
+    if (!lost && mem.rel && now - mem.t < 900 && trust < 1) {
+      for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { j[c2 + s] = vadd(j['sh' + s], vlerp(mem.rel[c2], vsub(j[c2 + s], j['sh' + s]), 0.15 + 0.85 * trust)); }
     }
     if (!lost) { mem.rel = {}; for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { mem.rel[c2] = vsub(j[c2 + s], j['sh' + s]); } mem.t = now; }
   }

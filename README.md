@@ -7,6 +7,15 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.12.1 (25 Oct): the jumping hands, fixed
+
+Found by replaying Atul's log of 24 Oct, frame by frame:
+
+- **The big one:** since v1.9 the arms are built from the picture, and the picture can't tell whether an elbow points toward the camera or away. A yes/no rule decided it from the body model's depth guess, and for an arm hanging or held sideways that guess hovers around zero, so the elbow and hand flipped about 25 cm forward and back every frame or two. The PiP and the Tracking Lab only show the flat picture, which is why they looked smooth. Now it's a dimmer instead of a switch, and depth gets its own calmer smoothing.
+- **Upside-down bodies:** a deep bend or a head leaving the top of the picture sometimes made the body model read you upside down for a frame, flinging the whole body. Those frames are now skipped.
+- **Half-seen arms** (hidden behind you, blurred) move only part of the way toward the body model's guess.
+- On that log: the hands shake about 3× less, and big jumps (over 8 cm in one frame) went from about 30 per arm to 1–4.
+
 ## v1.12 (24 Oct): Arms only
 
 **Arms only** (quick bar, or A): the body stands still in the middle of the room, nothing falls off, and there's nothing to pick up: just your arms, and P2's possessed arm when linked, to feel how the tracking moves. Three views (View section): **from your eyes, at your hands** (closest to VR), **facing you like a mirror**, or **from the side**. Press A again to go back.
