@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.13.1 (25 Oct): standing still stays still
+
+- The guess of where you stand wandered 1–2 cm (more in depth) even when you didn't move, and the walk gain doubled it, so the maquette drifted about constantly. Now a soft dead zone ignores wobbles under 2.5 cm (4 cm in depth); a real step still moves the body. Slider: Tracking → Standing still stays still (0 = off).
+- On Atul's logs: the 1-second wobble while standing went from 8–17 mm to 1–7 mm in depth, and to 0 side to side.
+
 ## v1.13 (25 Oct): an iPhone as the tracker
 
 - **Tracking → Tracker → iPhone (Body Stream app).** The new iPhone app in `iphone/` sends Apple's body tracking (real depth from the LiDAR, gravity-aligned) over Wi-Fi. Arms swung back read as back. Setup in `iphone/README.md`.

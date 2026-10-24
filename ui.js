@@ -207,7 +207,7 @@ function setupPanel() {
   tog('btn-puppet', 'puppetFall'); tog('btn-curl', 'curl'); tog('btn-lyingf', 'lyingFollow'); tog('btn-twitch', 'twitch');
   tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
-  sl('fov', 'fov', v => v + '°'); sl('feel', 'smooth', v => v.toFixed(2));
+  sl('fov', 'fov', v => v + '°'); sl('stillz', 'stillZone', v => v === 0 ? 'off' : 'ignore under ' + Math.round(v * 100) + ' cm'); sl('feel', 'smooth', v => v.toFixed(2));
   sel('reach', 'reach'); sel('ghost', 'ghost'); tog('btn-warmup', 'warmup', () => { if (!isGuest()) restartWorld(); }); tog('btn-thread', 'thread'); tog('btn-fpnear', 'fpNear');
   sl('ddrift', 'depthDrift', v => v === 0 ? 'not at all' : v === 1 ? 'fully' : Math.round(v * 100) + '%');
   sl('assist', 'assist', v => v === 0 ? 'off' : v.toFixed(2)); sl('ebuf', 'edgeBuffer', v => Math.round(v * 100) + ' cm'); sl('netsm', 'netSmooth', v => v + ' ms');

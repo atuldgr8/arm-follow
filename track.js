@@ -39,6 +39,7 @@ const SET = {
   lyingFollow: true,     // lying arm still follows P2, sluggishly and late
   twitch: true,          // small twitches when P2 moves a lot
   lag: 0.25,             // how late the lying arm follows (s)
+  stillZone: 0.025,      // where you stand: wobbles smaller than this (m; 1.6× in depth) are ignored, so standing still stays still (0 = off)
   lyingStrength: 0.7,    // how strongly the lying arm follows
   returnStyle: 'strings',// 'strings' (jerky, dangling, a little too slow) | 'glide' (smooth, mechanical)
   returnTime: 1.4,       // seconds the strings take
@@ -443,7 +444,17 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   M.fd = M.fd || new OneEuro(); M.fl = M.fl || new OneEuro();
   let dS = M.fd.filter(dIn, t, fr.minC, fr.beta), latS = M.fl.filter(latIn, t, fr.minC * 1.5, fr.beta);
   M.d = dS; M.latS = latS; M.src = src; M.dU = dU; M.T = T; M.raw = d; M.lean = lean; M.pitch = pitch;
-  let pel = V(sx * latS, 0.95, dS);
+  // STANDING STILL STAYS STILL. Even smoothed, the guess of where you stand wanders 1–2 cm (more in depth),
+  // and the walk gain doubles it. A soft dead zone: wobbles smaller than the zone are ignored; a real step
+  // pushes the body along (it trails the step by the zone's width, then catches up as you settle).
+  // Wider for depth, which the camera guesses worst.
+  let zone = SET.stillZone;
+  if (M.shown === undefined || zone <= 0) M.shown = { d: dS, lat: latS };
+  else {
+    let soft = (cur, tgt, z) => { let e = tgt - cur, a = Math.abs(e); return a <= z ? cur : cur + e * (1 - z / a); };
+    M.shown.d = soft(M.shown.d, dS, zone * 1.6); M.shown.lat = soft(M.shown.lat, latS, zone);
+  }
+  let pel = V(sx * M.shown.lat, 0.95, M.shown.d);
   sW = sU; hW = hU; let wlC = wl; wl = wlU;   // from here on, the upright body
   let A = w => V(pel.x + sx * (w.x - hW.x), pel.y - (w.y - hW.y), pel.z + (w.z - hW.z));
   let j = { pelvis: pel };
