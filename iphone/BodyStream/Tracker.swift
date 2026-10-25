@@ -158,8 +158,10 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         let now = Date()
         if now.timeIntervalSince(lastStatus) >= 1 {
             let secs = now.timeIntervalSince(lastStatus)
-            let seen = bodyN > 0 ? "tracking a body (\(Int(Double(bodyN) / secs))/s)" : "nobody in view: stand 2–4 m in front, whole body in the picture"
-            let laptops = clientCount == 0 ? "no laptop connected yet" : clientCount == 1 ? "1 laptop connected" : "\(clientCount) laptops connected"
+            var seen: String = "nobody in view: stand 2–4 m in front, whole body in the picture"
+            if bodyN > 0 { seen = "tracking a body (\(Int(Double(bodyN) / secs))/s)" }
+            var laptops: String = "no laptop connected yet"
+            if clientCount == 1 { laptops = "1 laptop connected" } else if clientCount > 1 { laptops = "\(clientCount) laptops connected" }
             status = seen + " · " + laptops
             bodyN = 0; sentN = 0; lastStatus = now
         }
@@ -185,18 +187,38 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
     private func cameraTick() {
-        let c = camera
+        let c: CameraStreamer = camera
         // how much of the ultra-wide picture the depth map covers (both are centred on nearly the same spot)
+        var z = CGSize.zero
         if c.depthOn && c.fov > 0 && c.width > 0 && c.depthW > 0 {
-            let fx = tan(Double(c.depthFov) * .pi / 360) / tan(Double(c.fov) * .pi / 360)
-            let fy = fx * (Double(c.depthH) / Double(c.depthW)) / (Double(c.height) / Double(c.width))
-            zone = CGSize(width: min(1, fx), height: min(1, fy))
-        } else { zone = .zero }
-        let meta: [String: Any] = ["mode": mode, "lens": c.lens, "fov": Double(c.fov), "dfov": Double(c.depthFov), "W": c.width, "H": c.height,
-                                   "dW": c.depthW, "dH": c.depthH, "depth": c.depthOn, "problem": c.problem]
+            let tanDepth: Double = tan(Double(c.depthFov) * Double.pi / 360.0)
+            let tanWide: Double = tan(Double(c.fov) * Double.pi / 360.0)
+            let fx: Double = tanDepth / tanWide
+            let depthAspect: Double = Double(c.depthH) / Double(c.depthW)
+            let pictureAspect: Double = Double(c.height) / Double(c.width)
+            let fy: Double = fx * depthAspect / pictureAspect
+            z = CGSize(width: min(1.0, fx), height: min(1.0, fy))
+        }
+        zone = z
+        var meta: [String: Any] = [:]
+        meta["mode"] = mode
+        meta["lens"] = c.lens
+        meta["fov"] = Double(c.fov)
+        meta["dfov"] = Double(c.depthFov)
+        meta["W"] = c.width
+        meta["H"] = c.height
+        meta["dW"] = c.depthW
+        meta["dH"] = c.depthH
+        meta["depth"] = c.depthOn
+        meta["problem"] = c.problem
         if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
-        let laptops = clientCount == 0 ? "no laptop connected yet" : clientCount == 1 ? "1 laptop connected" : "\(clientCount) laptops connected"
-        let what = !c.problem.isEmpty ? c.problem : "\(c.lens), \(Int(c.fov))°" + (c.depthOn ? " · depth \(c.depthW)×\(c.depthH)" : "")
+        var laptops: String = "no laptop connected yet"
+        if clientCount == 1 { laptops = "1 laptop connected" } else if clientCount > 1 { laptops = "\(clientCount) laptops connected" }
+        var what: String = c.problem
+        if what.isEmpty {
+            what = "\(c.lens), \(Int(c.fov))°"
+            if c.depthOn { what += " · depth \(c.depthW)×\(c.depthH)" }
+        }
         status = what + " · sending \(camSent)/s · " + laptops
         camSent = 0
     }
