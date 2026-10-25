@@ -16,7 +16,7 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private var multi: AVCaptureMultiCamSession?  // depth mode (ultra-wide + LiDAR together)
     var onJPEG: ((Data) -> Void)?                 // each picture, ready to send
     var onDepth: ((Data) -> Void)?                // each depth map, ready to send ("DPTH", width, height, then millimetres)
-    var onPreview: ((UIImage) -> Void)?           // depth mode: the picture for the phone's own screen
+    var onPreview: ((AVCaptureVideoPreviewLayer) -> Void)?   // depth mode: Apple's live preview, wired to the ultra-wide by hand
     private(set) var fov: Float = 0               // the ultra-wide's horizontal field of view, degrees
     private(set) var depthFov: Float = 0          // the LiDAR depth map's horizontal field of view, degrees
     private(set) var lens = "none"
@@ -27,6 +27,9 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private let q = DispatchQueue(label: "bodystream.camera")
     private let dq = DispatchQueue(label: "bodystream.depth")
     private let ci = CIContext()
+    private let encQ = DispatchQueue(label: "bodystream.encode")   // pictures are squeezed here, so the camera never waits
+    private var encoding = false
+    private(set) var dropped = 0                  // pictures skipped because the last one was still being squeezed
     private var configured = false
     private var frameN = 0, depthN = 0
 
@@ -164,7 +167,13 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
             guard m.canAddConnection(vc), m.canAddConnection(dc) else { m.commitConfiguration(); throw Fail(why: "couldn't connect both cameras") }
             m.addConnection(vc)
             m.addConnection(dc)
+            // the phone's own screen: Apple's live preview of the ultra-wide (smooth, and costs the phone nothing)
+            let layer = AVCaptureVideoPreviewLayer(sessionWithNoConnection: m)
+            layer.videoGravity = .resizeAspect
+            let pc = AVCaptureConnection(inputPort: vPort, videoPreviewLayer: layer)
+            if m.canAddConnection(pc) { m.addConnection(pc) }
             m.commitConfiguration()
+            DispatchQueue.main.async { self.onPreview?(layer) }
             if m.hardwareCost > 1.0 { throw Fail(why: "too much for the phone at once") }
             fov = uw.activeFormat.videoFieldOfView
             depthFov = lidar.activeFormat.videoFieldOfView
@@ -179,25 +188,27 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
     }
 
-    // every picture: shrink to 960 px wide and send as a JPEG (the laptop's MediaPipe shrinks it further anyway)
+    // every picture: turned upright, shrunk to 720 px on its long side, squeezed into a JPEG and sent. The squeezing
+    // happens on its own queue; if the last picture is still being squeezed, this one is skipped (the newest wins).
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         frameN += 1
-        let raw = CIImage(cvPixelBuffer: pixels)
-        sensorW = Int(raw.extent.width); sensorH = Int(raw.extent.height)
-        let img = raw.oriented(orient)   // turned to match how the phone is held
-        let k = 960.0 / max(1, max(img.extent.width, img.extent.height))
-        let scaled = img.transformed(by: CGAffineTransform(scaleX: k, y: k))
-        let small = scaled.transformed(by: CGAffineTransform(translationX: -scaled.extent.origin.x, y: -scaled.extent.origin.y))
-        width = Int(small.extent.width); height = Int(small.extent.height)
-        let opts = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.6]
-        if let jpeg = ci.jpegRepresentation(of: small, colorSpace: CGColorSpaceCreateDeviceRGB(), options: opts) {
-            onJPEG?(jpeg)
-        }
-        // depth mode has no live preview layer (two cameras), so the phone's screen shows these pictures
-        if depthOn && frameN % 3 == 0, let cg = ci.createCGImage(small, from: small.extent) {
-            let ui = UIImage(cgImage: cg)
-            DispatchQueue.main.async { self.onPreview?(ui) }
+        if encoding { dropped += 1; return }
+        encoding = true
+        let o = orient
+        encQ.async {
+            let raw = CIImage(cvPixelBuffer: pixels)
+            self.sensorW = Int(raw.extent.width); self.sensorH = Int(raw.extent.height)
+            let img = raw.oriented(o)   // turned to match how the phone is held
+            let k = 720.0 / max(1, max(img.extent.width, img.extent.height))
+            let scaled = img.transformed(by: CGAffineTransform(scaleX: k, y: k))
+            let small = scaled.transformed(by: CGAffineTransform(translationX: -scaled.extent.origin.x, y: -scaled.extent.origin.y))
+            self.width = Int(small.extent.width); self.height = Int(small.extent.height)
+            let opts = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.55]
+            if let jpeg = self.ci.jpegRepresentation(of: small, colorSpace: CGColorSpaceCreateDeviceRGB(), options: opts) {
+                self.onJPEG?(jpeg)
+            }
+            self.q.async { self.encoding = false }
         }
     }
 

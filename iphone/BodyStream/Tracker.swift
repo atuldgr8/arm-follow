@@ -20,6 +20,7 @@
 import Foundation
 import Combine   // ObservableObject and @Published live here
 import ARKit
+import AVFoundation
 import RealityKit
 import Network
 import CoreImage
@@ -30,7 +31,8 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     @Published var address = "starting…"
     @Published var status = "starting…"
     @Published var mode = "body"           // "body" (Apple's body tracking), "camera" (ultra-wide pictures) or "depth" (ultra-wide + LiDAR)
-    @Published var preview: UIImage?       // depth mode: the picture on the phone's screen
+    @Published var previewLayer: AVCaptureVideoPreviewLayer?   // depth mode: the live picture on the phone's screen
+    @Published var pictureAspect: CGFloat = 4.0 / 3.0   // width ÷ height of the picture, as turned
     @Published var zone: CGSize = .zero    // depth mode: how much of the picture the LiDAR covers (fractions of width, height)
     @Published var lines: [CGPoint] = []   // the skeleton on the phone's screen: pairs of points, one pair per bone
     weak var view: ARView?
@@ -84,7 +86,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             DispatchQueue.main.async { self.camSent += 1 }
         }
         camera.onDepth = { [weak self] d in self?.send(d, binary: true, depth: true) }
-        camera.onPreview = { [weak self] img in self?.preview = img }
+        camera.onPreview = { [weak self] layer in self?.previewLayer = layer }
         startServer()
         address = (Tracker.wifiAddress() ?? "no Wi-Fi") + ":\(port.rawValue)"
     }
@@ -175,7 +177,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         if m == "body" {
             camTimer?.invalidate(); camTimer = nil
             camera.stop()
-            preview = nil
+            previewLayer = nil
             if let s = arSession, let c = bodyConfig { s.run(c) }
             return
         }
@@ -234,6 +236,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             if c.depthOn { what += " · depth \(c.depthW)×\(c.depthH)" }
         }
         status = what + " · sending \(camSent)/s · " + laptops
+        pictureAspect = c.width > 0 && c.height > 0 ? CGFloat(c.width) / CGFloat(c.height) : 4.0 / 3.0
         camSent = 0
     }
 

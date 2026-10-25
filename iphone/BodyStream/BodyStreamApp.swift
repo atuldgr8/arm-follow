@@ -26,8 +26,9 @@ struct ContentView: View {
                 // two cameras at once: the ultra-wide picture, with the LiDAR's zone outlined
                 ZStack {
                     Color.black
-                    if let img = tracker.preview {
-                        Image(uiImage: img).resizable().scaledToFit()
+                    if let layer = tracker.previewLayer {
+                        LayerView(layer: layer)
+                            .aspectRatio(tracker.pictureAspect, contentMode: .fit)
                             .overlay(GeometryReader { g in
                                 Rectangle().stroke(Color.cyan, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
                                     .frame(width: g.size.width * tracker.zone.width, height: g.size.height * tracker.zone.height)
@@ -104,6 +105,35 @@ final class PreviewUIView: UIView {
         super.layoutSubviews()
         // keep the preview the right way up for the phone held on its side
         if let c = preview.connection {
+            let o = window?.windowScene?.interfaceOrientation ?? .landscapeRight
+            let angle: CGFloat = o == .landscapeLeft ? 180 : o == .portrait ? 90 : o == .portraitUpsideDown ? 270 : 0
+            if c.isVideoRotationAngleSupported(angle) { c.videoRotationAngle = angle }
+        }
+    }
+}
+
+// depth mode: hosts Apple's live preview layer (wired to the ultra-wide), kept the right way up
+struct LayerView: UIViewRepresentable {
+    let layer: AVCaptureVideoPreviewLayer
+    func makeUIView(context: Context) -> LayerHostView {
+        let v = LayerHostView()
+        v.backgroundColor = .black
+        v.host(layer)
+        return v
+    }
+    func updateUIView(_ uiView: LayerHostView, context: Context) { uiView.host(layer) }
+}
+final class LayerHostView: UIView {
+    private weak var hosted: AVCaptureVideoPreviewLayer?
+    func host(_ l: AVCaptureVideoPreviewLayer) {
+        if hosted !== l { hosted?.removeFromSuperlayer(); layer.addSublayer(l); hosted = l }
+        setNeedsLayout()
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let l = hosted else { return }
+        l.frame = bounds
+        if let c = l.connection {
             let o = window?.windowScene?.interfaceOrientation ?? .landscapeRight
             let angle: CGFloat = o == .landscapeLeft ? 180 : o == .portrait ? 90 : o == .portraitUpsideDown ? 270 : 0
             if c.isVideoRotationAngleSupported(angle) { c.videoRotationAngle = angle }
