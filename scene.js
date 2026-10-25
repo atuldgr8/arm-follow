@@ -363,14 +363,24 @@ function cameraStep(S, dt, b) {
   }
   // FIRST PERSON near the cube, and again near the plinth to set it down on (a game-like cut, eased)
   let h = S.hud || {}, carry = h.task === 'carry';
-  let fpWanted = SET.fpNear && ((!S.cube.held && h.near < SET.examineDist) || (S.cube.held && carry && S.target && h.nearT < SET.examineDist) || (S.cube.held && !carry));
+  // sticky: it switches in at examineDist but only switches out 0.7 m further away, and never within 1.5 s
+  // of switching (before, hovering near the line flipped the view back and forth)
+  let nearD = !S.cube.held ? h.near : carry && S.target ? h.nearT : 0;
+  let fpIn = SET.fpNear && (nearD < SET.examineDist || (S.cube.held && !carry));
+  let fpOut = !SET.fpNear || (nearD > SET.examineDist + 0.7 && !(S.cube.held && !carry));
+  let tNow = performance.now();
+  if (!SC.fpOn && fpIn && tNow - (SC.fpAt || 0) > 1500) { SC.fpOn = true; SC.fpAt = tNow; }
+  else if (SC.fpOn && fpOut && (tNow - (SC.fpAt || 0) > 1500 || !SET.fpNear)) { SC.fpOn = false; SC.fpAt = tNow; }
+  let fpWanted = !!SC.fpOn;
   SC.fp += ((fpWanted ? 1 : 0) - SC.fp) * Math.min(1, dt * 2.2);
   let f = smooth01(SC.fp);
   // the first-person eye follows a calmed copy of the head (and looks at a calmed target), so the view
   // stays steady even when tracking gets less sure close to the cube
-  let eyeRaw = b.head.clone().addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
+  // and only half of your leaning moves it (the body below is held still near the cube, sim.js reachHold)
+  let lean = b.head.clone().sub(b.pelvis).setY(0).multiplyScalar(0.5);
+  let eyeRaw = b.head.clone().sub(lean).addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
   if (!SC.eyeS || SC.eyeS.distanceTo(eyeRaw) > 1.5) SC.eyeS = eyeRaw.clone();
-  SC.eyeS.lerp(eyeRaw, Math.min(1, dt * 3));
+  SC.eyeS.lerp(eyeRaw, Math.min(1, dt * 1.6));
   let focusRaw = S.cube.held && carry && S.target ? new V3(S.target[0], PLINTH.h + 0.1, S.target[1]) : (SC.cubeS ? SC.cubeS.clone() : c.clone());
   if (!SC.focusS || SC.focusS.distanceTo(focusRaw) > 3) SC.focusS = focusRaw.clone();
   SC.focusS.lerp(focusRaw, Math.min(1, dt * 2));

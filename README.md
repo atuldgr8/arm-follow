@@ -7,6 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.18.5 (26 Oct): calmer near the cube, and a floor the camera can actually see
+- **First person near the cube is sticky:** it switches in at the examine distance, only switches out 0.7 m further away, and never flips twice within 1.5 s. Before, hovering near the line flipped the view back and forth.
+- **Near the cube, you move a quarter as much:** the hold starts at the same distance as first person. Inside about 20 cm of real floor the body moves a quarter of your movement; a real step still walks you. The first-person eye takes only half your lean and follows more slowly.
+- **Calibration only counts spots where the camera sees all of you** (head, shoulders, hips, both ankles, not at the picture's edge). The card says "Counting ✓" or "Not counting here". It reminds you that raising both hands for a second finishes it, so there's no walk to the keyboard.
+- **Cubes stay out of the front third of the floor** (closest to the camera); left/right cubes sit from the middle to the back.
+
 ## v1.18.2 (25 Oct)
 
 - The camera view never grows taller than 300 px (a phone held upright sent a tall picture that covered the screen).

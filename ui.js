@@ -423,10 +423,11 @@ function flowStep() {
   let guest = isGuest(), linked = SET.spaces === 2 && NET.connected, fmt = r => rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m';
   // 1 · the floor
   let done1 = calStepDone(), t1;
-  if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use, then press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see you in the camera…') + '</b>';
+  if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>raise both hands above your head for a second</b>, or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
+    + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
   else if (CAL.rect) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor: <b>' + fmt(CAL.rect) + '</b>';
   else if (CAL.skipped) t1 = '✓ Skipped: the walk-gain sliders are used instead.';
-  else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then press Done.';
+  else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then raise both hands above your head (or press Done). Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
   $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
   $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';

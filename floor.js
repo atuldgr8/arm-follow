@@ -46,10 +46,22 @@ function forgetFloor() {
   if (!isGuest() && RUN.phase === 'play') restartWorld();
   updatePanel();
 }
+// is the whole body in the picture, clearly? (head, shoulders, hips and both ankles, not at the picture's edge)
+// Only those spots count as floor: too close to the camera (feet cut off) or too far to a side isn't usable,
+// because tracking gets much worse there. Trackers without a picture skeleton (iPhone body mode) always count.
+const FULL_J = [0, 11, 12, 23, 24, 27, 28];
+function fullSeen(p) {
+  let lm = p.lmS || p.lm; if (!lm || !lm[28]) return true;
+  return FULL_J.every(i => { let q = lm[i]; return q && (q.visibility === undefined || q.visibility > 0.6) && q.x > 0.02 && q.x < 0.98 && q.y > 0.02 && q.y < 0.97; });
+}
 function calTick() {
   if (!CAL.active) return;
+  CAL.seen = null;
   for (let k of calSlots()) {
     let p = live(k); if (!p) continue;
+    let full = fullSeen(p);
+    CAL.seen = CAL.seen === true ? true : full;
+    if (!full) continue;   // not counted: part of the body is out of the picture
     let x = p.j.pelvis.x, z = p.j.pelvis.z, r = CAL.live;
     CAL.live = r ? { x0: Math.min(r.x0, x), x1: Math.max(r.x1, x), z0: Math.min(r.z0, z), z1: Math.max(r.z1, z) } : { x0: x, x1: x, z0: z, z1: z };
     let dd = p.distT || p.dist;
@@ -128,7 +140,7 @@ function realOf(v) {
   let p = live(1), h = p && p.home ? p.home : { x: 0, z: 2.8 };
   return { x: h.x + (v.x - START.x) / g, z: h.z + (v.z - START.z) / g };
 }
-// a new cube somewhere the body can actually reach (the first one at the far end of your floor)
+// a new cube somewhere the body can actually reach, kept out of the front of the floor (too close to the camera)
 function spawnInFloor(first) {
   // keep in from the edges by a reach (SET.edgeBuffer), so stretching out for the cube stays in the camera
   let u = usable(1), ins = Math.max(0.05, Math.min(SET.edgeBuffer, rectW(usable(1)) / 2 - 0.05, rectD(usable(1)) / 2 - 0.05)), best = null, bestD = -1;
@@ -136,13 +148,16 @@ function spawnInFloor(first) {
     // mostly left and right: the far side from where P1 stands now, near the middle front to back
     let p = live(1), cx = (u.x0 + u.x1) / 2, cz = (u.z0 + u.z1) / 2, side = first || !p ? (Math.random() < 0.5 ? -1 : 1) : (p.j.pelvis.x > cx ? -1 : 1);
     for (let k = 0; k < 60; k++) {
-      let x = cx + side * (rectW(u) / 2 - ins) * rand(0.75, 1), z = clamp(cz + rand(-0.2, 0.2) * rectD(u), u.z0 + ins, u.z1 - ins);
+      // front to back: the middle to the back of the floor (further from the camera = more of you in the picture)
+      let x = cx + side * (rectW(u) / 2 - ins) * rand(0.75, 1), z = clamp(cz + rand(0, 0.25) * rectD(u), u.z0 + ins, u.z1 - ins);
       let st = virtOf(x, z), c = new V3(st.x, 0, st.z - 0.47);
       if (Math.abs(c.x) <= ROOM.x - 0.6 && c.z >= ROOM.zBack + 0.6) return c;
     }
   }
   for (let k = 0; k < 160; k++) {
-    let x = first ? (u.x0 + u.x1) / 2 : rand(u.x0 + ins, u.x1 - ins), z = first ? u.z0 + ins : rand(u.z0 + ins, u.z1 - ins);
+    // never in the front third of the floor (the closest to the camera, where tracking is worst)
+    let zF = Math.min(u.z0 + Math.max(ins, rectD(u) / 3), u.z1 - ins);
+    let x = first ? (u.x0 + u.x1) / 2 : rand(u.x0 + ins, u.x1 - ins), z = first ? zF : rand(zF, u.z1 - ins);
     let st = virtOf(x, z), c = new V3(st.x, 0, st.z - 0.47);
     if (Math.abs(c.x) > ROOM.x - 0.6 || c.z < ROOM.zBack + 0.6) continue;
     if (first) return c;

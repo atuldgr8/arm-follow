@@ -92,19 +92,22 @@ function solidPush(vp) {
 }
 // REACHING HOLDS YOUR PLACE (a game-like cut): within reach of the cube, or of the plinth while you hold
 // it, the body ignores your small shifts (leaning in, swaying, the camera's wobble) and only your arms
-// move. A deliberate step still moves you: anything beyond the hold zone (about 12 cm of real floor at
+// move (a quarter as much). A deliberate step still moves you: anything beyond the hold zone (about 20 cm of real floor at
 // the usual walk gain) pushes the body along. Webcam/iPhone people only (the demo walks exactly).
 const RLOCK = { on: false, at: null };
 function reachHold(vp) {
   if (!SET.reachLock || SET.armsOnly || !AV.ok || SET.source !== 'mediapipe') { RLOCK.on = false; return vp; }
   let goal = CUBE.held ? (TARGET.on ? TARGET.p : null) : CUBE.c;
   let d = goal ? Math.hypot(goal.x - AV.root.x, goal.z - AV.root.z) : 99;
-  if (!RLOCK.on && d < 0.9 && !CUBE.vanish) { RLOCK.on = true; RLOCK.at = { x: AV.root.x, z: AV.root.z }; logEvent('reach hold', { on: true }); }
-  if (RLOCK.on && d > 1.25) { RLOCK.on = false; logEvent('reach hold', { on: false }); }
+  // switches on where the first-person view does (examineDist), off 0.7 m further out (sticky, like the view)
+  if (!RLOCK.on && d < SET.examineDist && !CUBE.vanish) { RLOCK.on = true; RLOCK.at = { x: AV.root.x, z: AV.root.z }; logEvent('reach hold', { on: true }); }
+  if (RLOCK.on && d > SET.examineDist + 0.7) { RLOCK.on = false; logEvent('reach hold', { on: false }); }
   if (!RLOCK.on) return vp;
-  let zone = 0.25, ex = vp.x - RLOCK.at.x, ez = vp.z - RLOCK.at.z, e = Math.hypot(ex, ez);
-  if (e > zone) { let k = 1 - zone / e; RLOCK.at.x += ex * k; RLOCK.at.z += ez * k; }
-  return { x: RLOCK.at.x, z: RLOCK.at.z };
+  // inside the hold zone (about 20 cm of real floor at the usual gain) the body moves a quarter as much as
+  // you do; a real step beyond it drags the held spot along, so walking still works
+  let zone = 0.4, ex = vp.x - RLOCK.at.x, ez = vp.z - RLOCK.at.z, e = Math.hypot(ex, ez);
+  if (e > zone) { let k = 1 - zone / e; RLOCK.at.x += ex * k; RLOCK.at.z += ez * k; ex = vp.x - RLOCK.at.x; ez = vp.z - RLOCK.at.z; }
+  return { x: RLOCK.at.x + ex * 0.25, z: RLOCK.at.z + ez * 0.25 };
 }
 
 // where an arm would be if it were attached: P1's shoulder, the driver's arm directions
