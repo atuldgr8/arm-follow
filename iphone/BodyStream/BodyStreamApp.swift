@@ -6,8 +6,14 @@ import SwiftUI
 import RealityKit
 import AVFoundation
 
+// the app's screen stays upright (like the Camera app); the text turns by itself to match how the phone is held
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask { .portrait }
+}
+
 @main
 struct BodyStreamApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some SwiftUI.Scene {   // SwiftUI's Scene (RealityKit has one too)
         WindowGroup { ContentView() }
     }
@@ -15,6 +21,31 @@ struct BodyStreamApp: App {
 
 struct ContentView: View {
     @StateObject private var tracker = Tracker()
+
+    // the address, status and mode switch
+    private var info: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("BODY STREAM v8 (25 Oct 23:35) · type this into Arm Follow")   // the version: change it with every update, so you can see the new one is installed
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+            Text(tracker.address)
+                .font(.system(size: 30, weight: .bold, design: .monospaced))
+            Text(tracker.status)
+                .font(.system(size: 13, design: .monospaced))
+            Picker("Mode", selection: Binding(get: { tracker.mode }, set: { tracker.setMode($0) })) {
+                Text("Body (Apple tracking)").tag("body")
+                Text("Camera (ultra-wide)").tag("camera")
+                Text("Camera + depth").tag("depth")
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 480)
+        }
+        .padding(14)
+        .background(Color.black.opacity(0.6))
+        .foregroundColor(.white)
+        .cornerRadius(12)
+        .padding(16)
+        .padding(.top, 40)
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -28,10 +59,10 @@ struct ContentView: View {
                     Color.black
                     if let layer = tracker.previewLayer {
                         LayerView(layer: layer)
-                            .aspectRatio(tracker.pictureAspect, contentMode: .fit)
+                            .aspectRatio(tracker.previewAspect, contentMode: .fit)
                             .overlay(GeometryReader { g in
                                 Rectangle().stroke(Color.cyan, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
-                                    .frame(width: g.size.width * tracker.zone.width, height: g.size.height * tracker.zone.height)
+                                    .frame(width: g.size.width * tracker.previewZone.width, height: g.size.height * tracker.previewZone.height)
                                     .position(x: g.size.width / 2, y: g.size.height / 2)
                             })
                     }
@@ -49,26 +80,16 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("BODY STREAM v7 (25 Oct 23:20) · type this into Arm Follow")   // the version: change it with every update, so you can see the new one is installed
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                Text(tracker.address)
-                    .font(.system(size: 30, weight: .bold, design: .monospaced))
-                Text(tracker.status)
-                    .font(.system(size: 13, design: .monospaced))
-                Picker("Mode", selection: Binding(get: { tracker.mode }, set: { tracker.setMode($0) })) {
-                    Text("Body (Apple tracking)").tag("body")
-                    Text("Camera (ultra-wide)").tag("camera")
-                    Text("Camera + depth").tag("depth")
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 480)
+            // the text, turned to read upright however the phone is held
+            GeometryReader { geo in
+                let sideways = abs(tracker.uiTurn) == 90
+                info
+                    .frame(width: sideways ? geo.size.height : geo.size.width, height: sideways ? geo.size.width : geo.size.height, alignment: .topLeading)
+                    .rotationEffect(.degrees(tracker.uiTurn))
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .animation(.easeInOut(duration: 0.25), value: tracker.uiTurn)
             }
-            .padding(14)
-            .background(Color.black.opacity(0.6))
-            .foregroundColor(.white)
-            .cornerRadius(12)
-            .padding(16)
+            .ignoresSafeArea()
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }   // the screen stays on
     }

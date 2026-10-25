@@ -42,6 +42,7 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private(set) var orient: CGImagePropertyOrientation = .up
     private(set) var sensorW = 0, sensorH = 0     // the picture as the sensor gives it, before turning
     private let motion = CMMotionManager()
+    var onTurn: ((CGImagePropertyOrientation) -> Void)?   // called (on the main queue) when the way it's held changes
     private(set) var flat = false                 // lying flat (or aimed straight up/down): keeping the last turn
     // how the phone thinks it's held, in words (shown on the phone and in Arm Follow's camera view)
     var heldLabel: String {
@@ -68,11 +69,13 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
             let ax = abs(g.x), ay = abs(g.y)
             if max(ax, ay) < 0.5 { self.flat = true; return }   // lying flat: keep the last turn
             self.flat = false
+            let was = self.orient
             if ax > ay * 1.3 {
                 self.orient = g.x < 0 ? .up : .down          // on its side: top to the left = the sensor's own way round
             } else if ay > ax * 1.3 {
                 self.orient = g.y < 0 ? .right : .left       // upright, or upside down
             }                                                // in between: keep the last turn (no flicker)
+            if self.orient != was { self.onTurn?(self.orient) }
         }
     }
 

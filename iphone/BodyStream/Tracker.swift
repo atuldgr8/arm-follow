@@ -33,7 +33,10 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     @Published var mode = "body"           // "body" (Apple's body tracking), "camera" (ultra-wide pictures) or "depth" (ultra-wide + LiDAR)
     @Published var previewLayer: AVCaptureVideoPreviewLayer?   // depth mode: the live picture on the phone's screen
     @Published var pictureAspect: CGFloat = 4.0 / 3.0   // width ÷ height of the picture, as turned
-    @Published var zone: CGSize = .zero    // depth mode: how much of the picture the LiDAR covers (fractions of width, height)
+    @Published var zone: CGSize = .zero
+    @Published var uiTurn: Double = 0                    // the phone's own screen: degrees to turn the text so it reads upright
+    @Published var previewZone: CGSize = .zero           // the depth zone on the phone's own preview (always drawn upright-shaped)
+    @Published var previewAspect: CGFloat = 0.75    // depth mode: how much of the picture the LiDAR covers (fractions of width, height)
     @Published var lines: [CGPoint] = []   // the skeleton on the phone's screen: pairs of points, one pair per bone
     weak var view: ARView?
     private var bonePairs: [(Int, Int)] = []
@@ -95,6 +98,19 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         }
         camera.onDepth = { [weak self] d in self?.send(d, binary: true, depth: true) }
         camera.onPreview = { [weak self] layer in self?.previewLayer = layer }
+        // the text on the phone turns with the phone (the app itself stays upright, like the Camera app)
+        let turn: (CGImagePropertyOrientation) -> Void = { [weak self] o in
+            var d: Double = 0
+            switch o {
+            case .up: d = 90        // on its side, top to the left
+            case .down: d = -90     // on its side, top to the right
+            case .left: d = 180     // upside down
+            default: d = 0          // upright
+            }
+            self?.uiTurn = d
+        }
+        camera.onTurn = turn
+        turn(camera.orient)
         startServer()
         pokeLocalNetwork()
         statusTick()
@@ -216,7 +232,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             else {
                 var name: String = "Ultra-wide camera"
                 if mode == "depth" { name = "Ultra-wide + depth" }
-                line2 = name + ", \(Int(c.fov))° · held " + c.heldLabel + " · camera \(fps) fps"
+                line2 = name + ", \(Int(c.fov))° · camera \(fps) fps"
                 if c.depthOn { line2 += " · LiDAR \(dps) fps (every other one sent, \(c.depthW)×\(c.depthH))" }
                 if clientCount > 0 { line2 += " · sending \(camSent)/s" }
             }
@@ -250,6 +266,9 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         let pictureZoneX: Double = c.sideways ? zoneY : zoneX
         let pictureZoneY: Double = c.sideways ? zoneX : zoneY
         zone = CGSize(width: pictureZoneX, height: pictureZoneY)
+        // the phone's own preview stays upright-shaped (the app doesn't rotate), so its zone is the sensor's, turned a quarter
+        previewZone = CGSize(width: zoneY, height: zoneX)
+        previewAspect = CGFloat(sensorAspect)
         var meta: [String: Any] = [:]
         meta["mode"] = mode
         meta["lens"] = c.lens

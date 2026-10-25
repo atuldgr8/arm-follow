@@ -48,7 +48,7 @@ Each laptop chooses its own tracker, so P1 can use an iPhone while P2 uses a web
 
 - Once the app is on the phone, unplug it: open Body Stream from the home screen like any app. Plug in again only to update it, or after 7 days (free Apple ID).
 - Xcode's bottom panel fills with camera messages ("orientation", "Fig" errors) while the app runs from it. They're harmless.
-- For a landscape-only app: target → General → iPhone Orientation, untick Portrait.
+- The app's screen stays upright like the Camera app, and its text turns by itself to read the right way however the phone is held (it goes by gravity, so Rotation Lock doesn't matter).
 
 ## Limits
 
