@@ -61,7 +61,8 @@ function startPhone(want) {
       if (m.mode !== PHONE.want) { ask(); return; }   // the phone is in another mode: ask again
       if (m.problem) TRK.status = 'iPhone: ' + m.problem;
       // the lens's real field of view, so distances are judged right
-      if (m.fov && Math.abs(SET.fov - Math.round(m.fov)) >= 1) { SET.fov = Math.round(m.fov); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
+      let hf = m.hfov || m.fov;   // across the picture as sent (an upright phone turns its picture a quarter)
+      if (hf && Math.abs(SET.fov - Math.round(hf)) >= 1) { SET.fov = Math.round(hf); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
       return;
     }
     if (pictures) { if (!PHONE.asked || performance.now() - PHONE.asked > 1000) { PHONE.asked = performance.now(); ask(); } return; }   // still in body mode: ask again
@@ -81,9 +82,11 @@ function stopPhone() {
 // Both lenses sit about a centimetre apart and look the same way, so a picture point maps to the depth map
 // by the two lenses' fields of view alone.
 function depthZone() {   // where the depth map sits in the picture: { x0, x1, y0, y1 } in 0..1, or null
-  let D = PHONE.depth, cm = PHONE.cam; if (!D || !cm || !cm.fov || !cm.dfov) return null;
-  let fx = Math.tan(cm.dfov * Math.PI / 360) / Math.tan(cm.fov * Math.PI / 360);
-  let fy = fx * (D.h / D.w) / ((cm.H || 540) / (cm.W || 960));
+  let D = PHONE.depth, cm = PHONE.cam; if (!D || !cm) return null;
+  let fx, fy;
+  if (cm.zx) { fx = cm.zx; fy = cm.zy; }   // the phone works it out, whichever way it's held
+  else if (cm.fov && cm.dfov) { fx = Math.tan(cm.dfov * Math.PI / 360) / Math.tan(cm.fov * Math.PI / 360); fy = fx * (D.h / D.w) / ((cm.H || 540) / (cm.W || 960)); }
+  else return null;
   return { x0: 0.5 - fx / 2, x1: 0.5 + fx / 2, y0: 0.5 - fy / 2, y1: 0.5 + fy / 2 };
 }
 // metres along the camera's axis at picture point (u, v), or 0 (outside the zone, or no reading).
@@ -108,12 +111,13 @@ const DEPTH_IN = i => (i === 11 || i === 12 || i === 23 || i === 24) ? 0.09 : i 
 function fuseDepth(c) {
   let cm = PHONE.cam;
   if (!PHONE.depth || !cm || performance.now() - PHONE.depth.t > 400) return null;
-  let tu = Math.tan(cm.fov * Math.PI / 360), asp = (cm.H || 540) / (cm.W || 960);
+  // half the view across and up-down, as slopes (from the phone, which knows which way it's held)
+  let tx = cm.tx || Math.tan(cm.fov * Math.PI / 360), ty = cm.ty || tx * (cm.H || 540) / (cm.W || 960);
   let P = c.lm.map((q, i) => {
     if (!q || (q.visibility !== undefined && q.visibility < 0.5)) return null;
     let z = depthAt(q.x, q.y); if (!z) return null;
     z += DEPTH_IN(i);
-    return { x: (q.x - 0.5) * 2 * tu * z, y: (q.y - 0.5) * 2 * tu * asp * z, z };
+    return { x: (q.x - 0.5) * 2 * tx * z, y: (q.y - 0.5) * 2 * ty * z, z };
   });
   if (!P[23] || !P[24]) return null;   // the hips must be measured, or nothing is placed by depth
   let H = { x: (P[23].x + P[24].x) / 2, y: (P[23].y + P[24].y) / 2, z: (P[23].z + P[24].z) / 2 };

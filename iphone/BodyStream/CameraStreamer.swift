@@ -32,6 +32,50 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
 
     struct Fail: Error { let why: String }
 
+    // WHICH WAY UP. The camera sensor always delivers its picture one fixed way round (landscape). The pictures
+    // (and depth maps) are turned to match how the phone is held, so the phone's screen and the laptop's MediaPipe
+    // always see people upright. Face up / face down keep the last turn.
+    private(set) var orient: CGImagePropertyOrientation = .up
+    private(set) var sensorW = 0, sensorH = 0     // the picture as the sensor gives it, before turning
+    private var orientObs: NSObjectProtocol?
+    var sideways: Bool { orient == .right || orient == .left }   // phone held upright: the picture is turned a quarter
+
+    override init() {
+        super.init()
+        DispatchQueue.main.async {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            let update: () -> Void = { [weak self] in
+                switch UIDevice.current.orientation {
+                case .portrait: self?.orient = .right
+                case .portraitUpsideDown: self?.orient = .left
+                case .landscapeLeft: self?.orient = .up       // home side on the right: the sensor's own way round
+                case .landscapeRight: self?.orient = .down
+                default: break
+                }
+            }
+            update()
+            self.orientObs = NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in update() }
+        }
+    }
+
+    // a depth map (w × h, row by row) turned the same way as the picture
+    static func turn(_ a: [UInt16], _ w: Int, _ h: Int, _ o: CGImagePropertyOrientation) -> ([UInt16], Int, Int) {
+        switch o {
+        case .down:
+            return (Array(a.reversed()), w, h)
+        case .right:   // a quarter turn clockwise
+            var b = [UInt16](repeating: 0, count: w * h)
+            for y in 0..<h { for x in 0..<w { b[x * h + (h - 1 - y)] = a[y * w + x] } }
+            return (b, h, w)
+        case .left:    // a quarter turn anticlockwise
+            var b = [UInt16](repeating: 0, count: w * h)
+            for y in 0..<h { for x in 0..<w { b[(w - 1 - x) * h + y] = a[y * w + x] } }
+            return (b, h, w)
+        default:
+            return (a, w, h)
+        }
+    }
+
     func start(depth: Bool) {
         q.async {
             self.stopAll()
@@ -139,9 +183,12 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         frameN += 1
-        let img = CIImage(cvPixelBuffer: pixels)
-        let k = 960.0 / max(1, img.extent.width)
-        let small = img.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        let raw = CIImage(cvPixelBuffer: pixels)
+        sensorW = Int(raw.extent.width); sensorH = Int(raw.extent.height)
+        let img = raw.oriented(orient)   // turned to match how the phone is held
+        let k = 960.0 / max(1, max(img.extent.width, img.extent.height))
+        let scaled = img.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        let small = scaled.transformed(by: CGAffineTransform(translationX: -scaled.extent.origin.x, y: -scaled.extent.origin.y))
         width = Int(small.extent.width); height = Int(small.extent.height)
         let opts = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.6]
         if let jpeg = ci.jpegRepresentation(of: small, colorSpace: CGColorSpaceCreateDeviceRGB(), options: opts) {
@@ -174,12 +221,14 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
                 if v.isFinite && v > 0 { mm[y * ow + x] = UInt16(min(65535, v * 1000)) }
             }
         }
+        let (turned, tw, th) = CameraStreamer.turn(mm, ow, oh, orient)   // the same way up as the picture
+        mm = turned
         var out = Data("DPTH".utf8)
-        var w16 = UInt16(ow).littleEndian, h16 = UInt16(oh).littleEndian
+        var w16 = UInt16(tw).littleEndian, h16 = UInt16(th).littleEndian
         withUnsafeBytes(of: &w16) { out.append(contentsOf: $0) }
         withUnsafeBytes(of: &h16) { out.append(contentsOf: $0) }
         mm.withUnsafeBytes { out.append(contentsOf: $0) }   // the phone is little-endian, as the laptop reads it
-        depthW = ow; depthH = oh
+        depthW = tw; depthH = th
         onDepth?(out)
     }
 }

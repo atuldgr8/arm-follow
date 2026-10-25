@@ -188,28 +188,42 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     }
     private func cameraTick() {
         let c: CameraStreamer = camera
-        // how much of the ultra-wide picture the depth map covers (both are centred on nearly the same spot)
-        var z = CGSize.zero
-        if c.depthOn && c.fov > 0 && c.width > 0 && c.depthW > 0 {
-            let tanDepth: Double = tan(Double(c.depthFov) * Double.pi / 360.0)
-            let tanWide: Double = tan(Double(c.fov) * Double.pi / 360.0)
-            let fx: Double = tanDepth / tanWide
-            let depthAspect: Double = Double(c.depthH) / Double(c.depthW)
-            let pictureAspect: Double = Double(c.height) / Double(c.width)
-            let fy: Double = fx * depthAspect / pictureAspect
-            z = CGSize(width: min(1.0, fx), height: min(1.0, fy))
+        // the picture's geometry, worked out the sensor's way round, then swapped if the phone is upright
+        let sensorAspect: Double = c.sensorW > 0 ? Double(c.sensorH) / Double(c.sensorW) : 0.75
+        let tanX: Double = tan(Double(c.fov) * Double.pi / 360.0)     // half the view across, as a slope
+        let tanY: Double = tanX * sensorAspect                          // half the view up-down
+        var zoneX: Double = 0
+        var zoneY: Double = 0
+        if c.depthOn && c.fov > 0 && c.depthW > 0 && c.depthH > 0 {
+            // how much of the picture the depth map covers (both lenses look the same way, a centimetre apart)
+            let depthAcross: Double = Double(c.sideways ? c.depthH : c.depthW)
+            let depthUpDown: Double = Double(c.sideways ? c.depthW : c.depthH)
+            let fx: Double = tan(Double(c.depthFov) * Double.pi / 360.0) / tanX
+            let fy: Double = fx * (depthUpDown / depthAcross) / sensorAspect
+            zoneX = min(1.0, fx)
+            zoneY = min(1.0, fy)
         }
-        zone = z
+        let pictureTanX: Double = c.sideways ? tanY : tanX
+        let pictureTanY: Double = c.sideways ? tanX : tanY
+        let pictureZoneX: Double = c.sideways ? zoneY : zoneX
+        let pictureZoneY: Double = c.sideways ? zoneX : zoneY
+        zone = CGSize(width: pictureZoneX, height: pictureZoneY)
         var meta: [String: Any] = [:]
         meta["mode"] = mode
         meta["lens"] = c.lens
         meta["fov"] = Double(c.fov)
         meta["dfov"] = Double(c.depthFov)
+        meta["hfov"] = 2.0 * atan(pictureTanX) * 180.0 / Double.pi   // across the picture as sent
+        meta["tx"] = pictureTanX
+        meta["ty"] = pictureTanY
+        meta["zx"] = pictureZoneX
+        meta["zy"] = pictureZoneY
         meta["W"] = c.width
         meta["H"] = c.height
         meta["dW"] = c.depthW
         meta["dH"] = c.depthH
         meta["depth"] = c.depthOn
+        meta["upright"] = c.sideways
         meta["problem"] = c.problem
         if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
         var laptops: String = "no laptop connected yet"

@@ -7,6 +7,10 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.17.1 (25 Oct): the iPhone's pictures turn with the phone
+
+- Body Stream's camera modes now turn the pictures (and the depth map) to match how the phone is held, so the phone's screen and the laptop's MediaPipe always see people upright. The phone sends the matching geometry, so the depth zone and the field of view follow too.
+
 ## v1.17 (25 Oct): iPhone ultra-wide + LiDAR depth
 
 - **Tracking → Tracker → iPhone ultra-wide + LiDAR depth.** The Body Stream app runs the ultra-wide lens and the LiDAR together (Apple's multi-cam) and sends both. MediaPipe finds the skeleton on the ultra-wide picture; each joint inside the depth zone (the middle of the picture) gets its real distance; where you stand comes from the measured hips. Joints outside the zone stay MediaPipe's guess.
