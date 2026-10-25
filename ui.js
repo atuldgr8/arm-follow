@@ -182,7 +182,26 @@ function restartAll() {
   restartWorld(); if (NET.connected) netSend({ type: 'restart' }); toast('Restarted');
 }
 function restartTracking() { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); else { people[1] = null; people[2] = null; DEMO.reset = true; } }
+// CHEAT MODE: one switch for every helper. Each mode keeps its own values, so a tweak made in cheat
+// mode (say a lower hand assist) is still there next time you switch back.
+const CHEAT_KEYS = ['assist', 'reachLock', 'solid', 'seeThroughCube', 'fpNear', 'smooth', 'stillZone', 'quickHands'];
+const CHEAT = {
+  on: { assist: 0.85, reachLock: true, solid: true, seeThroughCube: true, fpNear: true, smooth: 1.0, stillZone: 0.025, quickHands: false },
+  off: { assist: 0, reachLock: false, solid: false, seeThroughCube: false, fpNear: false, smooth: 0.5, stillZone: 0, quickHands: true },
+};
+try { let s = JSON.parse(localStorage.getItem('armfollow.cheat') || 'null'); if (s && s.on && s.off) { Object.assign(CHEAT.on, s.on); Object.assign(CHEAT.off, s.off); } } catch (e) {}
+for (let k of CHEAT_KEYS) SET[k] = CHEAT[SET.cheat ? 'on' : 'off'][k];
+function toggleCheat() {
+  let from = SET.cheat ? 'on' : 'off', to = SET.cheat ? 'off' : 'on';
+  for (let k of CHEAT_KEYS) CHEAT[from][k] = SET[k];   // remember this mode's tweaks
+  for (let k of CHEAT_KEYS) SET[k] = CHEAT[to][k];
+  SET.cheat = !SET.cheat;
+  try { localStorage.setItem('armfollow.cheat', JSON.stringify(CHEAT)); } catch (e) {}
+  for (let [id, key] of [['feel', 'smooth'], ['assist', 'assist'], ['stillz', 'stillZone']]) { let el = $(id); if (el) { el.value = SET[key]; el.dispatchEvent(new Event('input')); } }
+  logEvent('cheat', { on: SET.cheat }); toast(SET.cheat ? 'Cheat mode: every helper on' : 'Regular: no helpers');
+}
 function setupPanel() {
+  $('btn-cheat').onclick = () => { toggleCheat(); updatePanel(); };
   $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
   cameraList().then(l => { $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join(''); });
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
@@ -253,7 +272,7 @@ function updatePanel() {
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
   $('tracker').value = SET.tracker; cond('g-phone', SET.tracker === 'iphone'); cond('g-webcam', SET.tracker !== 'iphone');
-  quick('btn-pip', SET.pip); quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
+  quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
   set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
@@ -394,7 +413,7 @@ window.addEventListener('keydown', e => {
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
-  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscro'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
+  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();
@@ -403,6 +422,7 @@ window.addEventListener('keydown', e => {
   else if (k === 's') { SET.solo = !SET.solo; toast('Solo ' + (SET.solo ? 'on: you are P1 and P2' : 'off')); }
   else if (k === 'o') saveLog();
   else if (k === 'a') toggleArms();
+  else if (k === 'k') toggleCheat();
   else if (k === 'd') SET.hud = !SET.hud;
   else if (k === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
   else return;

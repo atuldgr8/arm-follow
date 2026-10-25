@@ -54,6 +54,7 @@ const SET = {
   armsOnly: false,       // ARMS ONLY: the body stays put, no falling off, no tasks: just your arms (and P2's), to feel the tracking
   armsView: 'first',     // arms only, the view: 'first' (from your eyes, looking at your hands) | 'mirror' (facing you) | 'side'
   warmup: false,         // an optional warm-up first: lift one cube above the waist and hold it; then the game (carry it to the other plinth)
+  cheat: true,           // cheat mode (all helpers on) or regular (all off); see CHEAT in ui.js
   reachLock: true,       // near the cube (and near the plinth while holding it), your place in the room holds still: only a real step away lets go
   solid: true,           // you can't walk through the cube or the plinths
   seeThroughCube: true,  // the held cube turns see-through, so you can see where to set it down
