@@ -7,6 +7,13 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.17 (25 Oct): iPhone ultra-wide + LiDAR depth
+
+- **Tracking → Tracker → iPhone ultra-wide + LiDAR depth.** The Body Stream app runs the ultra-wide lens and the LiDAR together (Apple's multi-cam) and sends both. MediaPipe finds the skeleton on the ultra-wide picture; each joint inside the depth zone (the middle of the picture) gets its real distance; where you stand comes from the measured hips. Joints outside the zone stay MediaPipe's guess.
+- **Show the depth zone** (Tracking): the zone outlined on the camera view, the measured joints ringed. The stats say how many of the 33 joints were measured.
+- The LiDAR measures surfaces, so a joint gets the distance of the skin or clothes in front of it (a set amount is added: about 9 cm for the torso, 3.5 for limbs), and a hand fully hidden behind you gets the distance of what hides it.
+- Tested here against a stand-in phone (depth maps arrive, the zone is placed, a recorded body is placed by its measured hips). Not yet run on a real iPhone.
+
 ## v1.16 (25 Oct): the iPhone as a wireless ultra-wide webcam
 
 - **Tracking → Tracker → iPhone camera, ultra-wide.** The Body Stream app streams its ultra-wide lens (about 106°, so a whole body fits from close by) and MediaPipe tracks it here, like DroidCam. The phone switches into camera mode by itself when asked; the field of view is set from the lens automatically.

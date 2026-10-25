@@ -16,7 +16,8 @@ const SET = {
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)
-  phoneIP: '',           // the address the Body Stream app shows
+  phoneIP: '',
+  pipDepth: true,        // iPhone ultra-wide + LiDAR: outline the depth zone and ring the measured joints in the camera view           // the address the Body Stream app shows
   mirror: true, smooth: 1.0, solo: false,   // smooth 1.0: Atul's pick after testing (25 Oct)
   reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
   mpSplit: true,         // 1 space: look for one person in each half of the picture
@@ -235,7 +236,7 @@ async function startMediaPipe(deviceId, fromPhone) {
     if (fromPhone) {
       // the iPhone's ultra-wide pictures arrive over Wi-Fi (phone.js) and are drawn onto this canvas, which MediaPipe reads
       MP.video = document.createElement('canvas'); MP.video.width = 960; MP.video.height = 540; MP.fromPhone = true;
-      startPhone('camera');
+      startPhone(PHONE_WANT[SET.tracker] || 'camera');
     } else {
       MP.fromPhone = false;
       MP.stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
@@ -399,6 +400,10 @@ const CAMT = { pitch: 0, n: 0 };
 const rotX = (v, a) => { let c = Math.cos(a), s = Math.sin(a); return { x: v.x, y: v.y * c - v.z * s, z: v.y * s + v.z * c, visibility: v.visibility }; };
 function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, arm: {} });
+  // iPhone ultra-wide + LiDAR: real distances for the joints the depth map covers (phone.js)
+  let DZ = SET.tracker === 'phonedepth' ? fuseDepth(c) : null;
+  if (DZ) c = Object.assign({}, c, { wl: DZ.wl });
+  M.meas = DZ ? DZ.meas : null;
   let t = now / 1000, fz = feelPx();
   let lm = filterPts(c.lm, M.lm, t, { x: W, y: H }, false, fz);
   let wl = filterPts(c.wl, M.wl, t, { x: 1000, y: 1000 }, true, fz);   // 3D points in millimetres, as in the main build
@@ -434,8 +439,8 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   // find where that shape has to stand so its picture lands exactly where the camera saw you. Every
   // visible point votes (the standard way to place a known 3D shape from one picture). With a tilted
   // camera, the distance along the floor is taken out of that.
-  let T = solvePlace(lm, wl, W, H, fpx);
-  if (T && T.z > 0.5 && T.z < 8) { d = clamp(T.z * Math.cos(pitch) - T.y * Math.sin(pitch), 0.6, 8); lat = T.x; src = 'body shape'; }
+  let T = DZ ? DZ.T : solvePlace(lm, wl, W, H, fpx);
+  if (T && T.z > 0.5 && T.z < 8) { d = clamp(T.z * Math.cos(pitch) - T.y * Math.sin(pitch), 0.6, 8); lat = T.x; src = DZ ? 'LiDAR' : 'body shape'; }
   let dB = d, latB = lat;
 
   // FEET, a bonus when they're in the picture and the floor was measured (this version's measurement).
@@ -443,7 +448,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let r = CAL.rect, ankL = lm[27], ankR = lm[28];
   let feetSeen = [ankL, ankR].every(q => q && (q.visibility === undefined || q.visibility > 0.6) && q.y < 0.98);
   if (M.kF === undefined) M.kF = 1;
-  if (r && r.v === 2 && r.fa !== undefined && feetSeen && !CAL.active) {
+  if (!DZ && r && r.v === 2 && r.fa !== undefined && feetSeen && !CAL.active) {
     let ay = Math.max(ankL.y, ankR.y), dF = ay - r.fa > 0.01 ? r.fb / (ay - r.fa) : 0, k = dF / dB;
     if (k > 0.6 && k < 1.6) { d = dF; lat = ((ankL.x + ankR.x) / 2 - 0.5) * 2 * dF * tanH; src = 'feet'; M.kF += (k - M.kF) * 0.05; }
     else src += ' (feet disagree: measure the floor again)';
@@ -495,6 +500,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
     if (SET.reach === 'picture') {
       for (let [a, b] of [['sh', 'el'], ['el', 'wr']]) {
         let ia = MPJ[a + s], ib = MPJ[b + s];
+        if (DZ && DZ.meas[ia] && DZ.meas[ib]) continue;   // both ends measured by the LiDAR: already real
         let px = (lm[ib].x - lm[ia].x) * W * mPx, py = (lm[ib].y - lm[ia].y) * H * mPx;
         let wv = vsub(wlC[ib], wlC[ia]), pic = Math.hypot(px, py);
         // HOW MUCH IT POINTS AT THE CAMERA, from how short it looks (the standard single-camera way,
@@ -788,7 +794,7 @@ function setSource(src, deviceId) {
   SET.source = src;
   people[1] = null; people[2] = null; DEMO.reset = true; COMP.hist = []; COMP.x = null;
   if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone('body'); }
-  else if (src === 'mediapipe' && SET.tracker === 'phonecam') { stopPhone(); startMediaPipe(null, true); }
+  else if (src === 'mediapipe' && (SET.tracker === 'phonecam' || SET.tracker === 'phonedepth')) { stopPhone(); startMediaPipe(null, true); }
   else if (src === 'mediapipe') { stopPhone(); startMediaPipe(deviceId); }
   else { stopMediaPipe(); stopPhone(); TRK.status = 'demo people'; }
 }

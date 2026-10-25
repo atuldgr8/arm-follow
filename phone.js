@@ -10,12 +10,14 @@
 // the camera (along the floor). Same directions as the webcam's, so everything after this is shared.
 // ============================================================
 
-const PHONE = { ws: null, ix: null, msg: null, fresh: false, img: null, url: null, f: {}, seen: 0, want: 'body', bmp: null, bmpN: 0, decoding: false, cam: null };
+const PHONE = { ws: null, ix: null, msg: null, fresh: false, img: null, url: null, f: {}, seen: 0, want: 'body', bmp: null, bmpN: 0, decoding: false, cam: null, depth: null };
 function phoneOn() { return SET.source === 'mediapipe' && SET.tracker === 'iphone'; }
 function phoneURL() { let a = (SET.phoneIP || '').trim().replace(/^\w+:\/\//, '').replace(/\/.*$/, ''); return a ? (a.includes(':') ? a : a + ':8443') : ''; }
+const PHONE_WANT = { iphone: 'body', phonecam: 'camera', phonedepth: 'depth' };   // Arm Follow's tracker → the phone's mode
 
-// want: 'body' (Apple's body tracking, the skeleton comes over) or 'camera' (the ultra-wide pictures come
-// over and MediaPipe runs on them here, like a wireless webcam). The phone switches when asked.
+// want: 'body' (Apple's body tracking, the skeleton comes over), 'camera' (the ultra-wide pictures come over and
+// MediaPipe runs on them here, like a wireless webcam) or 'depth' (the same, plus the LiDAR's depth map for the
+// middle of the picture). The phone switches when asked.
 function startPhone(want) {
   stopPhone();
   PHONE.want = want || 'body';
@@ -24,8 +26,10 @@ function startPhone(want) {
   TRK.status = 'iPhone: connecting to ' + a + ' …';
   let ws;
   try { ws = new WebSocket('wss://' + a); } catch (e) { TRK.status = 'iPhone: ' + (e.message || e); return; }
-  PHONE.ws = ws; ws.binaryType = 'blob';
-  ws.onopen = () => { if (PHONE.ws !== ws) return; try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (e) {} TRK.status = PHONE.want === 'camera' ? 'iPhone camera: connected, waiting for pictures' : 'iPhone: connected, waiting for a body'; };
+  let pictures = PHONE.want !== 'body';
+  PHONE.ws = ws; ws.binaryType = pictures ? 'arraybuffer' : 'blob';
+  let ask = () => { try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (x) {} };
+  ws.onopen = () => { if (PHONE.ws !== ws) return; ask(); TRK.status = pictures ? 'iPhone camera: connected, waiting for pictures' : 'iPhone: connected, waiting for a body'; };
   ws.onerror = () => {
     if (PHONE.ws !== ws) return;
     TRK.status = 'iPhone: could not connect to ' + a + '. Once per laptop: open https://' + a + ' in a new tab, choose Advanced → Proceed, then press Connect again. Same Wi-Fi as the phone?';
@@ -33,36 +37,87 @@ function startPhone(want) {
   ws.onclose = () => { if (PHONE.ws === ws) { PHONE.ws = null; if (!/could not connect/.test(TRK.status)) TRK.status = 'iPhone: disconnected (press Connect)'; } };
   ws.onmessage = e => {
     if (PHONE.ws !== ws) return;
-    if (typeof e.data !== 'string' && PHONE.want === 'camera') {   // camera mode: a picture for MediaPipe (the newest only)
-      if (PHONE.decoding) return;
+    if (typeof e.data !== 'string' && pictures) {
+      let buf = e.data, u8 = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
+      if (u8[0] === 68 && u8[1] === 80 && u8[2] === 84 && u8[3] === 72) {   // "DPTH": a depth map
+        let dv = new DataView(buf), w = dv.getUint16(4, true), h = dv.getUint16(6, true);
+        if (buf.byteLength >= 8 + w * h * 2) PHONE.depth = { w, h, data: new Uint16Array(buf.slice(8, 8 + w * h * 2)), t: performance.now() };
+        return;
+      }
+      if (PHONE.decoding) return;   // a picture for MediaPipe: the newest only
       PHONE.decoding = true;
-      createImageBitmap(e.data).then(b => { if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = b; PHONE.bmpN++; PHONE.decoding = false; }).catch(() => { PHONE.decoding = false; });
+      createImageBitmap(new Blob([buf], { type: 'image/jpeg' })).then(b => { if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = b; PHONE.bmpN++; PHONE.decoding = false; }).catch(() => { PHONE.decoding = false; });
       return;
     }
-    if (typeof e.data !== 'string') {   // the picture, for the camera view
+    if (typeof e.data !== 'string') {   // body mode: the picture, for the camera view
       let url = URL.createObjectURL(e.data), im = new Image();
       im.onload = () => { if (PHONE.url) URL.revokeObjectURL(PHONE.url); PHONE.url = url; PHONE.img = im; };
       im.onerror = () => URL.revokeObjectURL(url);
       im.src = url; return;
     }
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
-    if (m.mode === 'camera') {
+    if (m.mode === 'camera' || m.mode === 'depth') {
       PHONE.cam = m;
-      if (PHONE.want !== 'camera') { try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (x) {} return; }
+      if (m.mode !== PHONE.want) { ask(); return; }   // the phone is in another mode: ask again
+      if (m.problem) TRK.status = 'iPhone: ' + m.problem;
       // the lens's real field of view, so distances are judged right
       if (m.fov && Math.abs(SET.fov - Math.round(m.fov)) >= 1) { SET.fov = Math.round(m.fov); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
       return;
     }
-    if (PHONE.want === 'camera') { try { ws.send(JSON.stringify({ want: 'camera' })); } catch (x) {} return; }   // still in body mode: ask again
+    if (pictures) { if (!PHONE.asked || performance.now() - PHONE.asked > 1000) { PHONE.asked = performance.now(); ask(); } return; }   // still in body mode: ask again
     if (m.n) { PHONE.ix = {}; m.n.forEach((n, i) => { PHONE.ix[n] = i; }); }
     PHONE.msg = m; PHONE.fresh = true;
   };
 }
 function stopPhone() {
   if (PHONE.ws) { let w = PHONE.ws; PHONE.ws = null; try { w.close(); } catch (e) {} }
-  PHONE.msg = null; PHONE.fresh = false; PHONE.img = null; PHONE.f = {};
+  PHONE.msg = null; PHONE.fresh = false; PHONE.img = null; PHONE.f = {}; PHONE.depth = null; PHONE.cam = null;
   if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = null; PHONE.decoding = false;
   if (PHONE.url) { URL.revokeObjectURL(PHONE.url); PHONE.url = null; }
+}
+
+// ---------------- LiDAR depth for MediaPipe's joints (tracker: iPhone ultra-wide + depth) ----------------
+// The depth map covers the middle of the ultra-wide picture (the LiDAR sees about as wide as the main lens).
+// Both lenses sit about a centimetre apart and look the same way, so a picture point maps to the depth map
+// by the two lenses' fields of view alone.
+function depthZone() {   // where the depth map sits in the picture: { x0, x1, y0, y1 } in 0..1, or null
+  let D = PHONE.depth, cm = PHONE.cam; if (!D || !cm || !cm.fov || !cm.dfov) return null;
+  let fx = Math.tan(cm.dfov * Math.PI / 360) / Math.tan(cm.fov * Math.PI / 360);
+  let fy = fx * (D.h / D.w) / ((cm.H || 540) / (cm.W || 960));
+  return { x0: 0.5 - fx / 2, x1: 0.5 + fx / 2, y0: 0.5 - fy / 2, y1: 0.5 + fy / 2 };
+}
+// metres along the camera's axis at picture point (u, v), or 0 (outside the zone, or no reading).
+// A thin limb can let the background through, so of the 5×5 points around it, the nearer quarter is used.
+function depthAt(u, v) {
+  let D = PHONE.depth, Z = depthZone(); if (!Z) return 0;
+  let dx = (u - Z.x0) / (Z.x1 - Z.x0), dy = (v - Z.y0) / (Z.y1 - Z.y0);
+  if (dx < 0.02 || dx > 0.98 || dy < 0.02 || dy > 0.98) return 0;
+  let cx = Math.round(dx * (D.w - 1)), cy = Math.round(dy * (D.h - 1)), vals = [];
+  for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+    if (x < 0 || y < 0 || x >= D.w || y >= D.h) continue;
+    let mm = D.data[y * D.w + x]; if (mm > 250 && mm < 6000) vals.push(mm);
+  }
+  if (vals.length < 5) return 0;
+  vals.sort((a, b) => a - b);
+  return vals[Math.floor(vals.length * 0.25)] / 1000;
+}
+// the LiDAR sees the skin or clothes in front of a joint: torso joints sit about 9 cm behind it, limbs about 3.5
+const DEPTH_IN = i => (i === 11 || i === 12 || i === 23 || i === 24) ? 0.09 : i === 0 ? 0.08 : 0.035;
+// MediaPipe's joints with real distances where the depth map has them. Returns { wl, T, meas } (wl: hip-centred
+// metres, as MediaPipe's own; T: the hips' place from the camera; meas: which joints were measured) or null.
+function fuseDepth(c) {
+  let cm = PHONE.cam;
+  if (!PHONE.depth || !cm || performance.now() - PHONE.depth.t > 400) return null;
+  let tu = Math.tan(cm.fov * Math.PI / 360), asp = (cm.H || 540) / (cm.W || 960);
+  let P = c.lm.map((q, i) => {
+    if (!q || (q.visibility !== undefined && q.visibility < 0.5)) return null;
+    let z = depthAt(q.x, q.y); if (!z) return null;
+    z += DEPTH_IN(i);
+    return { x: (q.x - 0.5) * 2 * tu * z, y: (q.y - 0.5) * 2 * tu * asp * z, z };
+  });
+  if (!P[23] || !P[24]) return null;   // the hips must be measured, or nothing is placed by depth
+  let H = { x: (P[23].x + P[24].x) / 2, y: (P[23].y + P[24].y) / 2, z: (P[23].z + P[24].z) / 2 };
+  return { wl: c.wl.map((w, i) => P[i] ? { x: P[i].x - H.x, y: P[i].y - H.y, z: P[i].z - H.z } : w), T: H, meas: P.map(p => !!p) };
 }
 
 // Apple's joint names → this prototype's (first name found wins)

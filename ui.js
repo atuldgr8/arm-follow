@@ -63,7 +63,7 @@ function statsStep(S) {
     `arms ${armTxt}`,
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
-    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => { let M = MPF[k], p = people[k]; return 'P' + k + ' ' + M.src + ' ' + (M.d ? M.d.toFixed(2) : '-') + ' m · lean ' + Math.round(M.lean || 0) + '° · camera tilt ' + Math.round((M.pitch || 0) * 57.3) + '° (shape ' + (M.T ? M.T.x.toFixed(2) + ',' + M.T.z.toFixed(2) : 'none') + ' · size ' + (M.dU ? M.dU.toFixed(2) : '-') + ') · body at ' + (p && p.j ? p.j.pelvis.x.toFixed(2) + ',' + p.j.pelvis.z.toFixed(2) : '-') + (AV.ok ? ' · room ' + AV.root.x.toFixed(2) + ',' + AV.root.z.toFixed(2) : ''); }).join(' · ') + (CAL.active ? ' · MEASURING ' + (CAL.live ? rectW(CAL.live).toFixed(2) + '×' + rectD(CAL.live).toFixed(2) : 'nobody yet') : '') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
+    SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => { let M = MPF[k], p = people[k]; return 'P' + k + ' ' + M.src + (M.meas ? ' (' + M.meas.filter(Boolean).length + ' of 33 joints measured)' : '') + ' ' + (M.d ? M.d.toFixed(2) : '-') + ' m · lean ' + Math.round(M.lean || 0) + '° · camera tilt ' + Math.round((M.pitch || 0) * 57.3) + '° (shape ' + (M.T ? M.T.x.toFixed(2) + ',' + M.T.z.toFixed(2) : 'none') + ' · size ' + (M.dU ? M.dU.toFixed(2) : '-') + ') · body at ' + (p && p.j ? p.j.pelvis.x.toFixed(2) + ',' + p.j.pelvis.z.toFixed(2) : '-') + (AV.ok ? ' · room ' + AV.root.x.toFixed(2) + ',' + AV.root.z.toFixed(2) : ''); }).join(' · ') + (CAL.active ? ' · MEASURING ' + (CAL.live ? rectW(CAL.live).toFixed(2) + '×' + rectD(CAL.live).toFixed(2) : 'nobody yet') : '') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
     `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
@@ -129,6 +129,16 @@ function pipStep() {
     if (LOCK.on && LOCK.miss) {
       let mine = SET.spaces === 2 ? [NET.myId] : [1, 2], miss = mine.filter(k => LOCK.miss[k] && performance.now() - LOCK.miss[k] < 400);
       if (miss.length) { x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(229,55,42,0.95)'; x.font = 'bold 12px monospace'; x.fillText('P' + miss.join('+P') + ' not matched · Setup re-picks who is followed', 8, h - 10); x.restore(); }
+    }
+    // iPhone ultra-wide + LiDAR: the zone the depth map covers, and rings on the joints it measured
+    if (SET.tracker === 'phonedepth' && SET.pipDepth) {
+      let Z = depthZone();
+      if (Z) { x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.strokeRect(Z.x0 * w, Z.y0 * h, (Z.x1 - Z.x0) * w, (Z.y1 - Z.y0) * h); x.setLineDash([]); }
+      for (let k of [1, 2]) {
+        let M = MPF[k], p = people[k]; if (!M || !M.meas || !p || !p.lmS) continue;
+        x.strokeStyle = 'rgba(64,200,224,1)'; x.lineWidth = 2;
+        M.meas.forEach((ok, i) => { let q = p.lmS[i]; if (ok && q) { x.beginPath(); x.arc(q.x * w, q.y * h, 6, 0, Math.PI * 2); x.stroke(); } });
+      }
     }
     x.strokeStyle = 'rgba(120,230,255,0.95)'; x.lineWidth = 1.5;
     for (let hd of MP.handsFound || []) { for (let [a, b] of HAND_BONES) { x.beginPath(); x.moveTo(hd.lm[a].x * w, hd.lm[a].y * h); x.lineTo(hd.lm[b].x * w, hd.lm[b].y * h); x.stroke(); } }
@@ -223,7 +233,7 @@ function setupPanel() {
   sel('lifeless', 'lifeless'); sel('rstyle', 'returnStyle'); sel('grip', 'grip', () => { if (CUBE.held) dropCube('grip changed'); }); sel('holders', 'holders');
   $('view').value = SET.view; $('view').onchange = e => { setView(e.target.value); updatePanel(); };
   let tog = (id, key, after) => { $(id).onclick = () => { SET[key] = !SET[key]; if (after) after(); updatePanel(); }; };
-  tog('btn-mirror', 'mirror'); tog('btn-pipraw', 'pipRaw'); tog('btn-gest', 'gestures'); tog('btn-tilt', 'tiltFix', () => { CAMT.n = 0; CAMT.pitch = 0; }); tog('btn-bend', 'bendHold'); tog('btn-qhands', 'quickHands'); tog('btn-solo', 'solo');
+  tog('btn-mirror', 'mirror'); tog('btn-pipdepth', 'pipDepth'); tog('btn-pipraw', 'pipRaw'); tog('btn-gest', 'gestures'); tog('btn-tilt', 'tiltFix', () => { CAMT.n = 0; CAMT.pitch = 0; }); tog('btn-bend', 'bendHold'); tog('btn-qhands', 'quickHands'); tog('btn-solo', 'solo');
   tog('btn-puppet', 'puppetFall'); tog('btn-curl', 'curl'); tog('btn-lyingf', 'lyingFollow'); tog('btn-twitch', 'twitch');
   tog('btn-over', 'overshoot'); tog('btn-strings', 'strings'); tog('btn-hud', 'hud'); tog('btn-pip', 'pip');
   let sl = (id, key, fmt) => { $(id).value = SET[key]; $('val-' + id).textContent = fmt(SET[key]); $(id).oninput = e => { SET[key] = parseFloat(e.target.value); $('val-' + id).textContent = fmt(SET[key]); }; };
@@ -276,7 +286,7 @@ function updatePanel() {
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
-  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
+  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);

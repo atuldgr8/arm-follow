@@ -22,6 +22,21 @@ struct ContentView: View {
             if tracker.mode == "camera" {
                 PreviewView(session: tracker.camera.session).ignoresSafeArea()
             }
+            if tracker.mode == "depth" {
+                // two cameras at once: the ultra-wide picture, with the LiDAR's zone outlined
+                ZStack {
+                    Color.black
+                    if let img = tracker.preview {
+                        Image(uiImage: img).resizable().scaledToFit()
+                            .overlay(GeometryReader { g in
+                                Rectangle().stroke(Color.cyan, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
+                                    .frame(width: g.size.width * tracker.zone.width, height: g.size.height * tracker.zone.height)
+                                    .position(x: g.size.width / 2, y: g.size.height / 2)
+                            })
+                    }
+                }
+                .ignoresSafeArea()
+            }
             // the tracked skeleton, drawn over the camera
             Canvas { ctx, _ in
                 var path = Path()
@@ -43,9 +58,10 @@ struct ContentView: View {
                 Picker("Mode", selection: Binding(get: { tracker.mode }, set: { tracker.setMode($0) })) {
                     Text("Body (Apple tracking)").tag("body")
                     Text("Camera (ultra-wide)").tag("camera")
+                    Text("Camera + depth").tag("depth")
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 480)
             }
             .padding(14)
             .background(Color.black.opacity(0.6))

@@ -10,10 +10,12 @@
 //   (p and u are missing when no body is in view)
 // Every 4th frame, a small JPEG of the camera picture (binary).
 //
-// CAMERA MODE (the laptop asks for it, or tap Camera on the phone): no skeleton; instead every picture from
-// the ULTRA-WIDE lens goes out as a JPEG (binary), and once a second a text message
-// {"mode":"camera","lens":…,"fov":…,"W":…,"H":…}. The laptop runs MediaPipe on the pictures.
-// Laptops can send {"want":"body"} or {"want":"camera"} to switch the phone's mode.
+// CAMERA MODES (the laptop asks for one, or tap it on the phone): no skeleton; instead every picture from the
+// ULTRA-WIDE lens goes out as a JPEG (binary). In DEPTH mode the LiDAR's depth map goes out too, about 15 a
+// second (binary, starting "DPTH": width, height as 2-byte numbers, then one 2-byte millimetre value per point).
+// Once a second a text message {"mode":"camera"|"depth","lens","fov","dfov","W","H","dW","dH","depth","problem"}.
+// The laptop runs MediaPipe on the pictures (and reads real distances from the depth map).
+// Laptops can send {"want":"body"}, {"want":"camera"} or {"want":"depth"} to switch the phone's mode.
 
 import Foundation
 import Combine   // ObservableObject and @Published live here
@@ -27,7 +29,9 @@ import UIKit
 final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     @Published var address = "starting…"
     @Published var status = "starting…"
-    @Published var mode = "body"           // "body" (Apple's body tracking) or "camera" (ultra-wide pictures for MediaPipe)
+    @Published var mode = "body"           // "body" (Apple's body tracking), "camera" (ultra-wide pictures) or "depth" (ultra-wide + LiDAR)
+    @Published var preview: UIImage?       // depth mode: the picture on the phone's screen
+    @Published var zone: CGSize = .zero    // depth mode: how much of the picture the LiDAR covers (fractions of width, height)
     @Published var lines: [CGPoint] = []   // the skeleton on the phone's screen: pairs of points, one pair per bone
     weak var view: ARView?
     private var bonePairs: [(Int, Int)] = []
@@ -79,6 +83,8 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             self.send(jpeg, binary: true)
             DispatchQueue.main.async { self.camSent += 1 }
         }
+        camera.onDepth = { [weak self] d in self?.send(d, binary: true, depth: true) }
+        camera.onPreview = { [weak self] img in self?.preview = img }
         startServer()
         address = (Tracker.wifiAddress() ?? "no Wi-Fi") + ":\(port.rawValue)"
     }
@@ -161,25 +167,37 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
 
     // ---------------- switching between body tracking and camera ----------------
     func setMode(_ m: String) {
-        guard m != mode, m == "body" || m == "camera" else { return }
+        guard m != mode, ["body", "camera", "depth"].contains(m) else { return }
+        let was = mode
         mode = m
-        if m == "camera" {
-            arSession?.pause()
-            lines = []
-            camera.start()
-            camSent = 0
-            camTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.cameraTick() }
-        } else {
+        if m == "body" {
             camTimer?.invalidate(); camTimer = nil
             camera.stop()
+            preview = nil
             if let s = arSession, let c = bodyConfig { s.run(c) }
+            return
+        }
+        if was == "body" { arSession?.pause(); lines = [] }
+        camera.start(depth: m == "depth")
+        camSent = 0
+        if camTimer == nil {
+            camTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.cameraTick() }
         }
     }
     private func cameraTick() {
-        let meta: [String: Any] = ["mode": "camera", "lens": camera.lens, "fov": Double(camera.fov), "W": camera.width, "H": camera.height]
+        let c = camera
+        // how much of the ultra-wide picture the depth map covers (both are centred on nearly the same spot)
+        if c.depthOn && c.fov > 0 && c.width > 0 && c.depthW > 0 {
+            let fx = tan(Double(c.depthFov) * .pi / 360) / tan(Double(c.fov) * .pi / 360)
+            let fy = fx * (Double(c.depthH) / Double(c.depthW)) / (Double(c.height) / Double(c.width))
+            zone = CGSize(width: min(1, fx), height: min(1, fy))
+        } else { zone = .zero }
+        let meta: [String: Any] = ["mode": mode, "lens": c.lens, "fov": Double(c.fov), "dfov": Double(c.depthFov), "W": c.width, "H": c.height,
+                                   "dW": c.depthW, "dH": c.depthH, "depth": c.depthOn, "problem": c.problem]
         if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
         let laptops = clientCount == 0 ? "no laptop connected yet" : clientCount == 1 ? "1 laptop connected" : "\(clientCount) laptops connected"
-        status = "camera (\(camera.lens), \(Int(camera.fov))°): sending \(camSent)/s · " + laptops
+        let what = !c.problem.isEmpty ? c.problem : "\(c.lens), \(Int(c.fov))°" + (c.depthOn ? " · depth \(c.depthW)×\(c.depthH)" : "")
+        status = what + " · sending \(camSent)/s · " + laptops
         camSent = 0
     }
 
@@ -244,10 +262,10 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
-    private func send(_ data: Data, binary: Bool) {
+    private func send(_ data: Data, binary: Bool, depth: Bool = false) {
         netQ.async {
-            // pictures: if the Wi-Fi is behind, skip this one rather than build up a delay
-            if binary && self.pending > 2 { return }
+            // pictures: if the Wi-Fi is behind, skip this one rather than build up a delay (depth maps are small and always go)
+            if binary && !depth && self.pending > 2 { return }
             let meta = NWProtocolWebSocket.Metadata(opcode: binary ? .binary : .text)
             let ctx = NWConnection.ContentContext(identifier: binary ? "picture" : "body", metadata: [meta])
             for c in self.clients.values {

@@ -34,10 +34,11 @@ Built 25 Oct 2026 in the Arm Follow chat. First Xcode build (25 Oct) needed two 
 
 Each laptop chooses its own tracker, so P1 can use an iPhone while P2 uses a webcam, or both use phones.
 
-## Two modes
+## Three modes (switch on the phone, or from Arm Follow's Tracker menu)
 
-- **Body (Apple tracking):** Apple's 3D skeleton, real size, knows which way is down. Main lens only, so stand 3–4 m away.
-- **Camera (ultra-wide):** the phone becomes a wireless webcam with its ultra-wide lens; MediaPipe tracks on the laptop (Arm Follow → Tracker → iPhone camera). Sees a whole body from about 2 m. Arm Follow switches the phone's mode by itself; you can also tap it on the phone.
+- **Body (Apple tracking):** Apple's 3D skeleton, real size, knows which way is down. Main lens only, so stand 3–4 m away. Arm Follow: Tracker → iPhone body tracking.
+- **Camera (ultra-wide):** the phone becomes a wireless webcam with its ultra-wide lens; MediaPipe tracks on the laptop. Sees a whole body from about 2 m. Arm Follow: Tracker → iPhone camera, ultra-wide.
+- **Camera + depth (Pro iPhones):** the ultra-wide pictures AND the LiDAR's depth map at the same time. The LiDAR only sees about as wide as the main lens, so depth covers the middle of the picture (outlined in cyan on the phone and in Arm Follow's camera view); joints there get real distances, the rest stay MediaPipe's guess. Arm Follow: Tracker → iPhone ultra-wide + LiDAR depth. If the phone can't run both cameras at once, its status line says why.
 
 ## Good to know
 
