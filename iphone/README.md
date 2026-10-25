@@ -2,7 +2,7 @@
 
 A tiny iPhone app: Apple's body tracking (ARKit, helped by the LiDAR on Pro iPhones) sends your skeleton live to Arm Follow over Wi-Fi. Unlike the webcam, it measures depth instead of guessing it, so an arm swung back reads as back, and it knows which way is down, so a tilted phone doesn't tilt the body.
 
-Built 25 Oct 2026 in the Arm Follow chat. Not yet run on a real phone: the first build may need a small fix (send Claude the Xcode error text).
+Built 25 Oct 2026 in the Arm Follow chat. First Xcode build (25 Oct) needed two fixes, now in: `SwiftUI.Scene` (RealityKit also has a Scene) and `import Combine` in Tracker.swift.
 
 ## What you need
 

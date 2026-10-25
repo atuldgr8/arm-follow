@@ -7,7 +7,7 @@ import RealityKit
 
 @main
 struct BodyStreamApp: App {
-    var body: some Scene {
+    var body: some SwiftUI.Scene {   // SwiftUI's Scene (RealityKit has one too)
         WindowGroup { ContentView() }
     }
 }

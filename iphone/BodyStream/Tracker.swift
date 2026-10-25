@@ -11,6 +11,7 @@
 // Every 4th frame, a small JPEG of the camera picture (binary).
 
 import Foundation
+import Combine   // ObservableObject and @Published live here
 import ARKit
 import Network
 import CoreImage
