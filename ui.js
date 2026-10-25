@@ -122,8 +122,11 @@ function pipStep() {
       let base = CAL.rect || {}, src = { fa: fr.fa !== undefined ? fr.fa : base.fa, fb: fr.fb !== undefined ? fr.fb : base.fb };
       let pts = [[fr.x0, fr.z0], [fr.x1, fr.z0], [fr.x1, fr.z1], [fr.x0, fr.z1]].map(([px, pz]) => floorToPicture(src, px, pz));
       if (pts.every(q => q)) {
-        x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.beginPath();
+        // the floor: warm amber, dotted (the LiDAR zone is cyan, dashed)
+        x.strokeStyle = 'rgba(255,176,32,0.95)'; x.lineWidth = 2; x.setLineDash([2, 5]); x.lineCap = 'round'; x.beginPath();
         pts.forEach((q, i) => i ? x.lineTo(q.x * w, q.y * h) : x.moveTo(q.x * w, q.y * h)); x.closePath(); x.stroke(); x.setLineDash([]);
+        let lab = pts.reduce((a, q) => q.y > a.y ? q : a, pts[0]);
+        x.save(); x.translate(lab.x * w, lab.y * h + 12); if (SET.mirror) x.scale(-1, 1); x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 10px monospace'; x.textAlign = 'center'; x.fillText('FLOOR', 0, 0); x.restore();
         let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
         if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
       }
@@ -136,7 +139,10 @@ function pipStep() {
     // iPhone ultra-wide + LiDAR: the zone the depth map covers, and rings on the joints it measured
     if (SET.tracker === 'phonedepth' && SET.pipDepth) {
       let Z = depthZone();
-      if (Z) { x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.strokeRect(Z.x0 * w, Z.y0 * h, (Z.x1 - Z.x0) * w, (Z.y1 - Z.y0) * h); x.setLineDash([]); }
+      if (Z) {
+        x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.strokeRect(Z.x0 * w, Z.y0 * h, (Z.x1 - Z.x0) * w, (Z.y1 - Z.y0) * h); x.setLineDash([]);
+        x.save(); x.translate(Z.x0 * w + 4, Z.y0 * h + 12); if (SET.mirror) { x.translate((Z.x1 - Z.x0) * w - 8, 0); x.scale(-1, 1); x.textAlign = 'right'; } x.fillStyle = 'rgba(64,200,224,1)'; x.font = 'bold 10px monospace'; x.fillText('LiDAR', 0, 0); x.restore();
+      }
       for (let k of [1, 2]) {
         let M = MPF[k], p = people[k]; if (!M || !M.meas || !p || !p.lmS) continue;
         x.strokeStyle = 'rgba(64,200,224,1)'; x.lineWidth = 2;
