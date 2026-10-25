@@ -52,6 +52,9 @@
     #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 15px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 6; }
     /* ---- the start flow (on the stage) ---- */
     #flow { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(540px, 92%); background: var(--card); border: 1px solid var(--edge); border-radius: 18px; padding: 16px 18px 14px; font-size: 13px; line-height: 1.5; display: none; z-index: 5; counter-reset: step; box-shadow: 0 12px 36px rgba(0,0,0,0.07); }
+    #flow.folded { width: auto; padding: 8px 12px; }
+    #flow.folded .fstep, #flow.folded .fstart, #flow.folded > :not(.ftitle) { display: none !important; }
+    #flow.folded .ftitle { margin: 0; gap: 10px; }
     #flow .ftitle { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); margin-bottom: 6px; }
     .fstep { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); counter-increment: step; }
     .fstep .fnum { flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--n, var(--field)); color: var(--ink); display: grid; place-items: center; font-size: 12px; }
@@ -158,7 +161,7 @@
       <div id="edge"></div>
       <div id="centre"><div class="big">Walk onto the green ring</div><div class="small" id="centre-who"></div></div>
       <div id="flow">
-        <div class="ftitle">Getting ready</div>
+        <div class="ftitle" style="display:flex;align-items:center">Getting ready<button id="f-fold" title="Fold this card away (the stats and the scene behind it show again)" style="margin-left:auto;padding:2px 9px;font-size:13px;line-height:1">–</button></div>
         <div class="fstep" id="fs1"><div class="fnum"></div><div class="fbody"><div class="fh">Measure your floor</div><div class="fsub" id="fs1-text"></div><div class="fbtns"><button class="pri" id="f-cal">Calibrate</button><button id="f-skip">Skip</button><button id="f-again">Measure again</button></div><div class="fsub dim" id="fs1-other"></div></div></div>
         <div class="fstep" id="fs2"><div class="fnum"></div><div class="fbody"><div class="fh">Two rooms of different sizes</div><div class="fsub" id="fs2-text"></div><div class="seg"><button id="f-mapped">Map onto each other</button><button id="f-smaller">Use the smaller room</button></div><div class="fsub dim" id="fs2-note"></div></div></div>
         <div class="fstep" id="fs3"><div class="fnum"></div><div class="fbody"><div class="fh">Step into the camera</div><div class="fsub" id="fs3-text"></div></div></div>
@@ -186,7 +189,7 @@
           <div class="cond" id="g-mp" data-why="Camera settings · not for demo people">
           <div class="f" style="display:none"><label>Tracker<span class="tip" title="Webcam: MediaPipe guesses your body from a flat picture (depth is a guess). iPhone: the Body Stream app (iphone folder) uses Apple's body tracking with real depth, sent over Wi-Fi. iPhone camera: the same app streams its ultra-wide lens (sees a whole body from close by) and MediaPipe tracks it here, like a wireless webcam. Ultra-wide + LiDAR: the same, plus real distances from the LiDAR for joints in the middle of the picture (the LiDAR sees about as wide as the main lens). Each laptop chooses its own.">ⓘ</span></label><select id="tracker"><option value="webcam">Webcam (MediaPipe)</option><option value="iphone">iPhone body tracking (Body Stream app)</option><option value="phonecam">iPhone camera, ultra-wide (MediaPipe on its picture)</option><option value="phonedepth">iPhone ultra-wide + LiDAR depth</option></select></div>
           <div class="cond" id="g-phone" data-why="iPhone · choose an iPhone input">
-          <div class="f"><label>iPhone address<span class="tip" title="The address the Body Stream app shows on the phone. Phone and laptop on the same Wi-Fi (or the laptop on the phone's hotspot). The first time on a laptop: open https://that-address in a new tab, choose Advanced → Proceed, come back and Connect.">ⓘ</span></label><div style="display:flex;gap:6px"><input type="text" id="phoneip" placeholder="192.168.1.23:8443" style="flex:1;min-width:0"><button id="btn-phone" style="flex:0 0 auto;min-width:118px">Connect</button></div></div>
+          <div class="f"><label>iPhone address<span class="tip" title="The address the Body Stream app shows on the phone. Phone and laptop on the same Wi-Fi (or the laptop on the phone's hotspot). The first time on a laptop: open https://that-address in a new tab, choose Advanced → Proceed, come back and Connect.">ⓘ</span></label><div style="display:flex;gap:6px"><input type="text" id="phoneip" placeholder="192.168.1.23:8443" style="flex:1;min-width:0"><button id="btn-phone" style="flex:0 0 auto;min-width:118px">Connect</button></div><div id="phone-status" style="font-size:11px;line-height:1.45;color:var(--ink2);margin-top:6px;word-break:break-word"></div></div>
           </div>
           <div class="cond" id="g-webcam" data-why="Webcam settings · choose a webcam input">
           <select id="cam" style="display:none"></select>
@@ -357,7 +360,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.18 · 25 Oct 22:40'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.18.1 · 25 Oct 22:55'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

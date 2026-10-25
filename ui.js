@@ -231,10 +231,14 @@ function phoneButton() {
   else if (PHONE.state === 'failed') { t = 'Failed · retry'; c = 'bad'; }
   else if (PHONE.state === 'closed') { t = 'Reconnect'; }
   if (b.textContent !== t) b.textContent = t;
+  // what the link is doing, in words, right under the button (the stats can be hidden behind the getting-ready card)
+  let ps = $('phone-status'), st = SET.tracker !== 'webcam' && SET.source === 'mediapipe' ? TRK.status : '';
+  if (ps && ps.textContent !== st) ps.textContent = st;
   b.style.background = c === 'ok' ? '#12A150' : c === 'bad' ? '#E5372A' : ''; b.style.color = c ? '#fff' : ''; b.style.borderColor = c ? 'transparent' : '';
 }
 function setupPanel() {
   $('btn-cheat').onclick = () => { toggleCheat(); updatePanel(); };
+  $('f-fold').onclick = () => { let f = $('flow'); f.classList.toggle('folded'); $('f-fold').textContent = f.classList.contains('folded') ? '+' : '–'; };
   $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
   // ONE INPUT LIST: every webcam by name, the three iPhone modes, demo people. It sets the source, the tracker
   // and the camera together (those three stay underneath, hidden, as the rest of the code knows them).

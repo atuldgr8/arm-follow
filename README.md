@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.18.1 (25 Oct)
+
+- The iPhone link's status shows in words right under Connect (it was only in the stats, which the getting-ready card covers).
+- The getting-ready card folds away (– / +).
+
 ## v1.18 (25 Oct): one Input list, and a Connect button that says how it's going
 
 - **Tracking → Input**: every webcam by name, the three iPhone modes and demo people, in one list (instead of Source + Tracker + Camera).
