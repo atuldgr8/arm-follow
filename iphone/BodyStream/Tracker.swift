@@ -55,13 +55,18 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     private var names: [String] = []
     private var frameN = 0
     private var imgBusy = false
-    private var sentN = 0, bodyN = 0, clientCount = 0
-    private var lastStatus = Date()
+    private var bodyN = 0, clientCount = 0
     private weak var arSession: ARSession?
     private var bodyConfig: ARBodyTrackingConfiguration?
     let camera = CameraStreamer()
-    private var camTimer: Timer?
+    private var statusTimer: Timer?
     private var camSent = 0
+    private var arFrames = 0, msgSent = 0                // body mode: camera frames, messages sent
+    private var lastCamFrames = 0, lastDepthFrames = 0    // camera modes: the counts a second ago
+    private var serverState = "starting the server…"     // what the phone tells you about laptops being able to connect
+    private var serverReady = false
+    private var lastPoke = Date.distantPast
+    private var lastAddress = ""
     private var pending = 0                  // pictures still on their way (only touched on netQ)
 
     func start(session: ARSession) {
@@ -74,6 +79,9 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             guard let i = names.firstIndex(of: a), let k = names.firstIndex(of: b) else { return nil }
             return (i, k)
         }
+        // the camera: iPhone asks when the camera first starts; if it was refused before, say where to allow it
+        let camAuth = AVCaptureDevice.authorizationStatus(for: .video)
+        if camAuth == .notDetermined { AVCaptureDevice.requestAccess(for: .video) { _ in } }
         session.delegate = self
         arSession = session
         let config = ARBodyTrackingConfiguration()
@@ -88,12 +96,15 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         camera.onDepth = { [weak self] d in self?.send(d, binary: true, depth: true) }
         camera.onPreview = { [weak self] layer in self?.previewLayer = layer }
         startServer()
-        address = (Tracker.wifiAddress() ?? "no Wi-Fi") + ":\(port.rawValue)"
+        pokeLocalNetwork()
+        statusTick()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.statusTick() }
     }
 
     // ---------------- every camera frame ----------------
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         frameN += 1
+        arFrames += 1
         let cam = frame.camera
         let res = cam.imageResolution
         if mode != "body" { return }
@@ -138,7 +149,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         }
         if let data = try? JSONSerialization.data(withJSONObject: msg) {
             send(data, binary: false)
-            sentN += 1
+            if clientCount > 0 { msgSent += 1 }
         }
 
         // a small picture for the camera view in Arm Follow
@@ -155,18 +166,6 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
                 DispatchQueue.main.async { self.imgBusy = false }
             }
         }
-
-        // the status line, once a second
-        let now = Date()
-        if now.timeIntervalSince(lastStatus) >= 1 {
-            let secs = now.timeIntervalSince(lastStatus)
-            var seen: String = "nobody in view: stand 2–4 m in front, whole body in the picture"
-            if bodyN > 0 { seen = "tracking a body (\(Int(Double(bodyN) / secs))/s)" }
-            var laptops: String = "no laptop connected yet"
-            if clientCount == 1 { laptops = "1 laptop connected" } else if clientCount > 1 { laptops = "\(clientCount) laptops connected" }
-            status = seen + " · " + laptops
-            bodyN = 0; sentN = 0; lastStatus = now
-        }
     }
 
     // ---------------- switching between body tracking and camera ----------------
@@ -175,7 +174,6 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         let was = mode
         mode = m
         if m == "body" {
-            camTimer?.invalidate(); camTimer = nil
             camera.stop()
             previewLayer = nil
             if let s = arSession, let c = bodyConfig { s.run(c) }
@@ -184,11 +182,53 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         if was == "body" { arSession?.pause(); lines = [] }
         camera.start(depth: m == "depth")
         camSent = 0
-        if camTimer == nil {
-            camTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.cameraTick() }
-        }
+        lastCamFrames = camera.frameN; lastDepthFrames = camera.depthN
     }
-    private func cameraTick() {
+
+    // ---------------- once a second: the address, the status lines, and (camera modes) the picture's geometry ----------------
+    private func statusTick() {
+        // the address laptops should use, kept current (switching to the hotspot or another Wi-Fi changes it)
+        let cur = Tracker.currentAddress()
+        let addr = cur.map { "\($0.ip):\(port.rawValue)" } ?? "not on Wi-Fi or hotspot"
+        if addr != address { address = addr }
+        if addr != lastAddress { lastAddress = addr; pokeLocalNetwork() }
+        if !serverReady && Date().timeIntervalSince(lastPoke) > 10 { pokeLocalNetwork() }
+        if mode != "body" { geometryTick() }
+
+        // line 1: can laptops connect?
+        var line1 = serverState
+        let camAuth = AVCaptureDevice.authorizationStatus(for: .video)
+        if camAuth == .denied || camAuth == .restricted { line1 = "Camera blocked: Settings → Bodystream → Camera → on" }
+        if let c = cur { line1 += " · via " + c.via }
+        // line 2: what's being sent, how fast
+        var line2 = ""
+        if mode == "body" {
+            var seen = "nobody in view (stand 3–4 m away, whole body in the picture)"
+            if bodyN > 0 { seen = "body found \(bodyN)/s" }
+            line2 = "Body tracking · camera \(arFrames) fps · " + seen
+            if clientCount > 0 { line2 += " · sending \(msgSent)/s" }
+        } else {
+            let c = camera
+            let fps = c.frameN - lastCamFrames
+            let dps = c.depthN - lastDepthFrames
+            lastCamFrames = c.frameN; lastDepthFrames = c.depthN
+            if !c.problem.isEmpty { line2 = c.problem }
+            else {
+                var name: String = "Ultra-wide camera"
+                if mode == "depth" { name = "Ultra-wide + depth" }
+                line2 = name + ", \(Int(c.fov))° · camera \(fps) fps"
+                if c.depthOn { line2 += " · LiDAR \(dps) fps (every other one sent, \(c.depthW)×\(c.depthH))" }
+                if clientCount > 0 { line2 += " · sending \(camSent)/s" }
+            }
+        }
+        // line 3: who's connected
+        var line3 = "no laptop connected yet"
+        if clientCount == 1 { line3 = "1 laptop connected" } else if clientCount > 1 { line3 = "\(clientCount) laptops connected" }
+        status = line1 + "\n" + line2 + "\n" + line3
+        arFrames = 0; bodyN = 0; msgSent = 0; camSent = 0
+    }
+
+    private func geometryTick() {
         let c: CameraStreamer = camera
         // the picture's geometry, worked out the sensor's way round, then swapped if the phone is upright
         let sensorAspect: Double = c.sensorW > 0 ? Double(c.sensorH) / Double(c.sensorW) : 0.75
@@ -228,20 +268,11 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         meta["upright"] = c.sideways
         meta["problem"] = c.problem
         if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
-        var laptops: String = "no laptop connected yet"
-        if clientCount == 1 { laptops = "1 laptop connected" } else if clientCount > 1 { laptops = "\(clientCount) laptops connected" }
-        var what: String = c.problem
-        if what.isEmpty {
-            what = "\(c.lens), \(Int(c.fov))°"
-            if c.depthOn { what += " · depth \(c.depthW)×\(c.depthH)" }
-        }
-        status = what + " · sending \(camSent)/s · " + laptops
         pictureAspect = c.width > 0 && c.height > 0 ? CGFloat(c.width) / CGFloat(c.height) : 4.0 / 3.0
-        camSent = 0
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
-        status = "Tracking stopped: \(error.localizedDescription)"
+        serverState = "Body tracking stopped: \(error.localizedDescription)"
     }
 
     // ---------------- the server (secure WebSocket) ----------------
@@ -250,7 +281,8 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         if let identity = Tracker.loadIdentity(), let secIdentity = sec_identity_create(identity) {
             sec_protocol_options_set_local_identity(tls.securityProtocolOptions, secIdentity)
         } else {
-            status = "bodystream.p12 is missing from the app (see README, step 4)"
+            serverState = "bodystream.p12 is missing from the app (drag it in, tick the app as its target)"
+            return
         }
         let params = NWParameters(tls: tls)
         let ws = NWProtocolWebSocket.Options()
@@ -261,14 +293,64 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             let l = try NWListener(using: params, on: port)
             l.newConnectionHandler = { [weak self] c in self?.accept(c) }
             l.stateUpdateHandler = { [weak self] state in
-                if case .failed(let e) = state {
-                    DispatchQueue.main.async { self?.status = "Server failed: \(e)" }
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    switch state {
+                    case .ready:
+                        self.serverReady = true
+                        self.serverState = "Ready for laptops"
+                    case .waiting(let e):
+                        // usually iPhone's Local Network permission: not given yet, or turned off
+                        self.serverReady = false
+                        self.serverState = "Laptops can't connect yet: allow Local Network (Settings → Privacy & Security → Local Network → Bodystream) · \(e.localizedDescription)"
+                        self.pokeLocalNetwork()
+                        self.restartServer(after: 3)
+                    case .failed(let e):
+                        self.serverReady = false
+                        self.serverState = "Server stopped (\(e.localizedDescription)); restarting…"
+                        self.restartServer(after: 3)
+                    default:
+                        break
+                    }
                 }
             }
             l.start(queue: netQ)
             listener = l
         } catch {
-            status = "Server error: \(error.localizedDescription)"
+            serverState = "Server couldn't start: \(error.localizedDescription); retrying…"
+            restartServer(after: 3)
+        }
+    }
+
+    private var restarting = false
+    private func restartServer(after secs: Double) {
+        if restarting { return }
+        restarting = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + secs) { [weak self] in
+            guard let self = self else { return }
+            self.restarting = false
+            if self.serverReady { return }
+            self.listener?.cancel(); self.listener = nil
+            self.startServer()
+        }
+    }
+
+    // LOCAL NETWORK PERMISSION. iPhone only asks "allow Bodystream to find devices on your local network?" when the
+    // app itself reaches out to another device; this app only waits for laptops, so without this the question
+    // never comes and laptops are refused. So it reaches out on purpose: one tiny message to the network's router.
+    private func pokeLocalNetwork() {
+        lastPoke = Date()
+        for ip in Tracker.allAddresses().values {
+            let parts = ip.split(separator: ".")
+            guard parts.count == 4 else { continue }
+            let router = parts[0...2].joined(separator: ".") + ".1"
+            if router == ip { continue }   // on its own hotspot the phone IS the router
+            let c = NWConnection(host: NWEndpoint.Host(router), port: 9, using: .udp)
+            c.stateUpdateHandler = { s in
+                if case .ready = s { c.send(content: Data([0]), completion: .contentProcessed { _ in c.cancel() }) }
+            }
+            c.start(queue: netQ)
+            netQ.asyncAfter(deadline: .now() + 3) { c.cancel() }
         }
     }
 
@@ -330,24 +412,31 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         return (identity as! SecIdentity)
     }
 
-    // this phone's address on the Wi-Fi (or on its own hotspot)
-    static func wifiAddress() -> String? {
+    // every IPv4 address this phone has, by network name (en0 = Wi-Fi, bridge… = its own hotspot)
+    static func allAddresses() -> [String: String] {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return [:] }
         defer { freeifaddrs(ifaddr) }
         var found: [String: String] = [:]
         for ptr in sequence(first: first, next: { $0.pointee.ifa_next }) {
             let i = ptr.pointee
             guard let sa = i.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET) else { continue }
             let name = String(cString: i.ifa_name)
+            guard name.hasPrefix("en") || name.hasPrefix("bridge") else { continue }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             if getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
                 found[name] = String(cString: host)
             }
         }
-        if let wifi = found["en0"] { return wifi }
-        if let hotspot = found.first(where: { $0.key.hasPrefix("bridge") })?.value { return hotspot }
-        return found.first(where: { $0.key.hasPrefix("en") })?.value
+        return found
+    }
+    // the one address laptops should use right now: the hotspot's when a laptop is on it, else the Wi-Fi's
+    static func currentAddress() -> (ip: String, via: String)? {
+        let all = allAddresses()
+        if let h = all.first(where: { $0.key.hasPrefix("bridge") })?.value { return (h, "hotspot") }
+        if let w = all["en0"] { return (w, "Wi-Fi") }
+        if let o = all.first(where: { $0.key.hasPrefix("en") })?.value { return (o, "network") }
+        return nil
     }
 
     static func round3(_ v: Float) -> Double { (Double(v) * 1000).rounded() / 1000 }

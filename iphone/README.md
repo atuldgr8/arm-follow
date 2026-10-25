@@ -42,6 +42,10 @@ Each laptop chooses its own tracker, so P1 can use an iPhone while P2 uses a web
 
 ## Good to know
 
+- **The phone's screen says it all:** the address to type (kept current: switch to the hotspot and it changes), whether laptops can connect ("Ready for laptops", or what's blocking it), the camera's frame rate, what's being sent per second, and how many laptops are connected.
+- **Local Network permission:** iPhone asks "allow Bodystream to find devices on your local network?" the first time the app opens (the app reaches out once on purpose, since iPhone only asks then). Say Allow. If you said no: Settings → Privacy & Security → Local Network → Bodystream on. Without it, laptops get "refused to connect".
+- **On the phone's hotspot,** the laptop uses the hotspot address (usually 172.20.10.1); the app shows it as soon as the laptop joins.
+
 - Once the app is on the phone, unplug it: open Body Stream from the home screen like any app. Plug in again only to update it, or after 7 days (free Apple ID).
 - Xcode's bottom panel fills with camera messages ("orientation", "Fig" errors) while the app runs from it. They're harmless.
 - For a landscape-only app: target → General → iPhone Orientation, untick Portrait.

@@ -31,7 +31,7 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private var encoding = false
     private(set) var dropped = 0                  // pictures skipped because the last one was still being squeezed
     private var configured = false
-    private var frameN = 0, depthN = 0
+    private(set) var frameN = 0, depthN = 0     // pictures and depth maps from the cameras so far (for the frame rates)
 
     struct Fail: Error { let why: String }
 
