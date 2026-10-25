@@ -14,7 +14,7 @@ Built 25 Oct 2026 in the Arm Follow chat. First Xcode build (25 Oct) needed two 
 
 1. **New project.** Xcode → File → New → Project → iOS → **App**. Name it `BodyStream`, Interface **SwiftUI**, Language **Swift**. Untick tests and storage. Save it anywhere.
 2. **Replace the code.** In the project's folder, Xcode made `BodyStreamApp.swift` and `ContentView.swift`. Delete `ContentView.swift` (Move to Trash). Replace the contents of `BodyStreamApp.swift` with this folder's `BodyStream/BodyStreamApp.swift`.
-3. **Add the tracker.** Drag `BodyStream/Tracker.swift` from this folder into the project's file list (tick "Copy items if needed" and the BodyStream target).
+3. **Add the tracker.** Drag `BodyStream/Tracker.swift` and `BodyStream/CameraStreamer.swift` from this folder into the project's file list (tick "Copy items if needed" and the BodyStream target).
 4. **Add the certificate.** Drag `BodyStream/bodystream.p12` in the same way. It lets the laptop connect securely; it was made just for this app (password `bodystream`) and protects nothing else.
 5. **Permissions.** Click the project (top of the file list) → target **BodyStream** → **Info** tab → under Custom iOS Target Properties, add two rows with the + button:
    - `Privacy - Camera Usage Description`: `Tracks your body for Arm Follow`
@@ -33,6 +33,11 @@ Built 25 Oct 2026 in the Arm Follow chat. First Xcode build (25 Oct) needed two 
 4. **In Arm Follow:** Tracking → Tracker → **iPhone (Body Stream app)**, type the address, **Connect**. The camera view in the corner shows the phone's picture with your skeleton.
 
 Each laptop chooses its own tracker, so P1 can use an iPhone while P2 uses a webcam, or both use phones.
+
+## Two modes
+
+- **Body (Apple tracking):** Apple's 3D skeleton, real size, knows which way is down. Main lens only, so stand 3–4 m away.
+- **Camera (ultra-wide):** the phone becomes a wireless webcam with its ultra-wide lens; MediaPipe tracks on the laptop (Arm Follow → Tracker → iPhone camera). Sees a whole body from about 2 m. Arm Follow switches the phone's mode by itself; you can also tap it on the phone.
 
 ## Good to know
 

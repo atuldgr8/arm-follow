@@ -87,6 +87,7 @@ function pipStep() {
   let c = $('pip'); c.style.display = SET.pip ? 'block' : 'none'; if (!SET.pip) return;
   // the picture: the webcam's, or the small one the iPhone sends
   let pic = SET.source !== 'mediapipe' ? null : phoneOn() ? (PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null)
+    : MP.fromPhone ? (PHONE.bmp ? { el: MP.video, w: MP.video.width, h: MP.video.height } : null)
     : MP.video && MP.video.readyState >= 2 ? { el: MP.video, w: MP.video.videoWidth, h: MP.video.videoHeight } : null;
   let cam = !!pic;
   let w = 400, h = cam ? Math.round(w * pic.h / pic.w) : 260;
@@ -207,7 +208,7 @@ function setupPanel() {
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
   $('tracker').value = SET.tracker; $('tracker').onchange = e => { SET.tracker = e.target.value; try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {} unlockPeople(); restartTracking(); updatePanel(); };
   $('phoneip').value = SET.phoneIP;
-  let phoneGo = () => { SET.phoneIP = $('phoneip').value.trim(); try { localStorage.setItem('armfollow.phoneIP', SET.phoneIP); } catch (x) {} if (SET.tracker === 'iphone') restartTracking(); };
+  let phoneGo = () => { SET.phoneIP = $('phoneip').value.trim(); try { localStorage.setItem('armfollow.phoneIP', SET.phoneIP); } catch (x) {} if (SET.tracker !== 'webcam') restartTracking(); };
   $('btn-phone').onclick = phoneGo; $('phoneip').onkeydown = e => { if (e.key === 'Enter') phoneGo(); };
   let sel = (id, key, after, num) => { $(id).value = String(SET[key]); $(id).onchange = e => { SET[key] = num ? parseFloat(e.target.value) : e.target.value; if (after) after(); updatePanel(); }; };
   sel('hands', 'hands', restartTracking);
@@ -271,7 +272,7 @@ function updatePanel() {
   let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
-  $('tracker').value = SET.tracker; cond('g-phone', SET.tracker === 'iphone'); cond('g-webcam', SET.tracker !== 'iphone');
+  $('tracker').value = SET.tracker; cond('g-phone', SET.tracker !== 'webcam'); cond('g-webcam', SET.tracker !== 'iphone');
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';

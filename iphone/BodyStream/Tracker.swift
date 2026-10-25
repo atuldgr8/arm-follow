@@ -9,6 +9,11 @@
 //   u  each joint's place in the picture, 0..1 (for drawing the skeleton on it)
 //   (p and u are missing when no body is in view)
 // Every 4th frame, a small JPEG of the camera picture (binary).
+//
+// CAMERA MODE (the laptop asks for it, or tap Camera on the phone): no skeleton; instead every picture from
+// the ULTRA-WIDE lens goes out as a JPEG (binary), and once a second a text message
+// {"mode":"camera","lens":…,"fov":…,"W":…,"H":…}. The laptop runs MediaPipe on the pictures.
+// Laptops can send {"want":"body"} or {"want":"camera"} to switch the phone's mode.
 
 import Foundation
 import Combine   // ObservableObject and @Published live here
@@ -22,6 +27,7 @@ import UIKit
 final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     @Published var address = "starting…"
     @Published var status = "starting…"
+    @Published var mode = "body"           // "body" (Apple's body tracking) or "camera" (ultra-wide pictures for MediaPipe)
     @Published var lines: [CGPoint] = []   // the skeleton on the phone's screen: pairs of points, one pair per bone
     weak var view: ARView?
     private var bonePairs: [(Int, Int)] = []
@@ -45,6 +51,12 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     private var imgBusy = false
     private var sentN = 0, bodyN = 0, clientCount = 0
     private var lastStatus = Date()
+    private weak var arSession: ARSession?
+    private var bodyConfig: ARBodyTrackingConfiguration?
+    let camera = CameraStreamer()
+    private var camTimer: Timer?
+    private var camSent = 0
+    private var pending = 0                  // pictures still on their way (only touched on netQ)
 
     func start(session: ARSession) {
         guard ARBodyTrackingConfiguration.isSupported else {
@@ -57,9 +69,16 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             return (i, k)
         }
         session.delegate = self
+        arSession = session
         let config = ARBodyTrackingConfiguration()
         config.automaticSkeletonScaleEstimationEnabled = true   // learns your real size
+        bodyConfig = config
         session.run(config)
+        camera.onJPEG = { [weak self] jpeg in
+            guard let self = self else { return }
+            self.send(jpeg, binary: true)
+            DispatchQueue.main.async { self.camSent += 1 }
+        }
         startServer()
         address = (Tracker.wifiAddress() ?? "no Wi-Fi") + ":\(port.rawValue)"
     }
@@ -69,7 +88,8 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         frameN += 1
         let cam = frame.camera
         let res = cam.imageResolution
-        var msg: [String: Any] = ["t": frame.timestamp * 1000, "W": Double(res.width), "H": Double(res.height)]
+        if mode != "body" { return }
+        var msg: [String: Any] = ["mode": "body", "t": frame.timestamp * 1000, "W": Double(res.width), "H": Double(res.height)]
         if frameN % 30 == 1 { msg["n"] = names }
 
         if let body = frame.anchors.compactMap({ $0 as? ARBodyAnchor }).first, body.isTracked {
@@ -139,6 +159,30 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         }
     }
 
+    // ---------------- switching between body tracking and camera ----------------
+    func setMode(_ m: String) {
+        guard m != mode, m == "body" || m == "camera" else { return }
+        mode = m
+        if m == "camera" {
+            arSession?.pause()
+            lines = []
+            camera.start()
+            camSent = 0
+            camTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.cameraTick() }
+        } else {
+            camTimer?.invalidate(); camTimer = nil
+            camera.stop()
+            if let s = arSession, let c = bodyConfig { s.run(c) }
+        }
+    }
+    private func cameraTick() {
+        let meta: [String: Any] = ["mode": "camera", "lens": camera.lens, "fov": Double(camera.fov), "W": camera.width, "H": camera.height]
+        if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
+        let laptops = clientCount == 0 ? "no laptop connected yet" : clientCount == 1 ? "1 laptop connected" : "\(clientCount) laptops connected"
+        status = "camera (\(camera.lens), \(Int(camera.fov))°): sending \(camSent)/s · " + laptops
+        camSent = 0
+    }
+
     func session(_ session: ARSession, didFailWithError error: Error) {
         status = "Tracking stopped: \(error.localizedDescription)"
     }
@@ -190,19 +234,27 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         receive(c)
     }
 
-    // laptops don't send anything, but reading keeps the connection healthy and notices when it closes
+    // a laptop may ask for a mode ({"want":"camera"} or {"want":"body"}); reading also notices when it closes
     private func receive(_ c: NWConnection) {
-        c.receiveMessage { [weak self] _, _, _, error in
+        c.receiveMessage { [weak self] data, _, _, error in
+            if let d = data, let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let want = obj["want"] as? String {
+                DispatchQueue.main.async { self?.setMode(want) }
+            }
             if error == nil { self?.receive(c) } else { c.cancel() }
         }
     }
 
     private func send(_ data: Data, binary: Bool) {
         netQ.async {
+            // pictures: if the Wi-Fi is behind, skip this one rather than build up a delay
+            if binary && self.pending > 2 { return }
             let meta = NWProtocolWebSocket.Metadata(opcode: binary ? .binary : .text)
             let ctx = NWConnection.ContentContext(identifier: binary ? "picture" : "body", metadata: [meta])
             for c in self.clients.values {
-                c.send(content: data, contentContext: ctx, isComplete: true, completion: .contentProcessed { _ in })
+                if binary { self.pending += 1 }
+                c.send(content: data, contentContext: ctx, isComplete: true, completion: .contentProcessed { [weak self] _ in
+                    if binary { self?.netQ.async { self?.pending = max(0, (self?.pending ?? 1) - 1) } }
+                })
             }
         }
     }

@@ -4,6 +4,7 @@
 
 import SwiftUI
 import RealityKit
+import AVFoundation
 
 @main
 struct BodyStreamApp: App {
@@ -18,6 +19,9 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             CameraView(tracker: tracker).ignoresSafeArea()
+            if tracker.mode == "camera" {
+                PreviewView(session: tracker.camera.session).ignoresSafeArea()
+            }
             // the tracked skeleton, drawn over the camera
             Canvas { ctx, _ in
                 var path = Path()
@@ -36,6 +40,12 @@ struct ContentView: View {
                     .font(.system(size: 30, weight: .bold, design: .monospaced))
                 Text(tracker.status)
                     .font(.system(size: 13, design: .monospaced))
+                Picker("Mode", selection: Binding(get: { tracker.mode }, set: { tracker.setMode($0) })) {
+                    Text("Body (Apple tracking)").tag("body")
+                    Text("Camera (ultra-wide)").tag("camera")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 360)
             }
             .padding(14)
             .background(Color.black.opacity(0.6))
@@ -57,4 +67,30 @@ struct CameraView: UIViewRepresentable {
         return view
     }
     func updateUIView(_ uiView: ARView, context: Context) {}
+}
+
+// camera mode: what the ultra-wide lens sees (the laptop gets the same pictures)
+struct PreviewView: UIViewRepresentable {
+    let session: AVCaptureSession
+    func makeUIView(context: Context) -> PreviewUIView {
+        let v = PreviewUIView()
+        v.preview.session = session
+        v.preview.videoGravity = .resizeAspect
+        v.backgroundColor = .black
+        return v
+    }
+    func updateUIView(_ uiView: PreviewUIView, context: Context) {}
+}
+final class PreviewUIView: UIView {
+    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // keep the preview the right way up for the phone held on its side
+        if let c = preview.connection {
+            let o = window?.windowScene?.interfaceOrientation ?? .landscapeRight
+            let angle: CGFloat = o == .landscapeLeft ? 180 : o == .portrait ? 90 : o == .portraitUpsideDown ? 270 : 0
+            if c.isVideoRotationAngleSupported(angle) { c.videoRotationAngle = angle }
+        }
+    }
 }

@@ -10,19 +10,22 @@
 // the camera (along the floor). Same directions as the webcam's, so everything after this is shared.
 // ============================================================
 
-const PHONE = { ws: null, ix: null, msg: null, fresh: false, img: null, url: null, f: {}, seen: 0 };
+const PHONE = { ws: null, ix: null, msg: null, fresh: false, img: null, url: null, f: {}, seen: 0, want: 'body', bmp: null, bmpN: 0, decoding: false, cam: null };
 function phoneOn() { return SET.source === 'mediapipe' && SET.tracker === 'iphone'; }
 function phoneURL() { let a = (SET.phoneIP || '').trim().replace(/^\w+:\/\//, '').replace(/\/.*$/, ''); return a ? (a.includes(':') ? a : a + ':8443') : ''; }
 
-function startPhone() {
+// want: 'body' (Apple's body tracking, the skeleton comes over) or 'camera' (the ultra-wide pictures come
+// over and MediaPipe runs on them here, like a wireless webcam). The phone switches when asked.
+function startPhone(want) {
   stopPhone();
+  PHONE.want = want || 'body';
   let a = phoneURL();
   if (!a) { TRK.status = 'iPhone: type the address the Body Stream app shows, then Connect'; return; }
   TRK.status = 'iPhone: connecting to ' + a + ' …';
   let ws;
   try { ws = new WebSocket('wss://' + a); } catch (e) { TRK.status = 'iPhone: ' + (e.message || e); return; }
   PHONE.ws = ws; ws.binaryType = 'blob';
-  ws.onopen = () => { if (PHONE.ws === ws) TRK.status = 'iPhone: connected, waiting for a body'; };
+  ws.onopen = () => { if (PHONE.ws !== ws) return; try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (e) {} TRK.status = PHONE.want === 'camera' ? 'iPhone camera: connected, waiting for pictures' : 'iPhone: connected, waiting for a body'; };
   ws.onerror = () => {
     if (PHONE.ws !== ws) return;
     TRK.status = 'iPhone: could not connect to ' + a + '. Once per laptop: open https://' + a + ' in a new tab, choose Advanced → Proceed, then press Connect again. Same Wi-Fi as the phone?';
@@ -30,6 +33,12 @@ function startPhone() {
   ws.onclose = () => { if (PHONE.ws === ws) { PHONE.ws = null; if (!/could not connect/.test(TRK.status)) TRK.status = 'iPhone: disconnected (press Connect)'; } };
   ws.onmessage = e => {
     if (PHONE.ws !== ws) return;
+    if (typeof e.data !== 'string' && PHONE.want === 'camera') {   // camera mode: a picture for MediaPipe (the newest only)
+      if (PHONE.decoding) return;
+      PHONE.decoding = true;
+      createImageBitmap(e.data).then(b => { if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = b; PHONE.bmpN++; PHONE.decoding = false; }).catch(() => { PHONE.decoding = false; });
+      return;
+    }
     if (typeof e.data !== 'string') {   // the picture, for the camera view
       let url = URL.createObjectURL(e.data), im = new Image();
       im.onload = () => { if (PHONE.url) URL.revokeObjectURL(PHONE.url); PHONE.url = url; PHONE.img = im; };
@@ -37,6 +46,14 @@ function startPhone() {
       im.src = url; return;
     }
     let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.mode === 'camera') {
+      PHONE.cam = m;
+      if (PHONE.want !== 'camera') { try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (x) {} return; }
+      // the lens's real field of view, so distances are judged right
+      if (m.fov && Math.abs(SET.fov - Math.round(m.fov)) >= 1) { SET.fov = Math.round(m.fov); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
+      return;
+    }
+    if (PHONE.want === 'camera') { try { ws.send(JSON.stringify({ want: 'camera' })); } catch (x) {} return; }   // still in body mode: ask again
     if (m.n) { PHONE.ix = {}; m.n.forEach((n, i) => { PHONE.ix[n] = i; }); }
     PHONE.msg = m; PHONE.fresh = true;
   };
@@ -44,6 +61,7 @@ function startPhone() {
 function stopPhone() {
   if (PHONE.ws) { let w = PHONE.ws; PHONE.ws = null; try { w.close(); } catch (e) {} }
   PHONE.msg = null; PHONE.fresh = false; PHONE.img = null; PHONE.f = {};
+  if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = null; PHONE.decoding = false;
   if (PHONE.url) { URL.revokeObjectURL(PHONE.url); PHONE.url = null; }
 }
 

@@ -222,7 +222,7 @@ function rehome() { for (let k of [1, 2]) { if (people[k]) people[k].home = null
 const MP = { video: null, stream: null, lm: null, halves: null, crop: null, hands: null, last: -1, running: false, found: [], handsFound: [], tick: 0 };
 const MP_HALVES = [{ x0: 0, w: 0.6 }, { x0: 0.4, w: 0.6 }];
 const MP_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
-async function startMediaPipe(deviceId) {
+async function startMediaPipe(deviceId, fromPhone) {
   stopMediaPipe();
   TRK.status = 'MediaPipe: loading...';
   try {
@@ -232,8 +232,15 @@ async function startMediaPipe(deviceId) {
       await new Promise(r => setTimeout(r, 50)); waited += 50;
       if (waited > 20000) throw new Error('MediaPipe took too long to load');
     }
-    MP.stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    MP.video = document.createElement('video'); MP.video.playsInline = true; MP.video.muted = true; MP.video.srcObject = MP.stream; await MP.video.play();
+    if (fromPhone) {
+      // the iPhone's ultra-wide pictures arrive over Wi-Fi (phone.js) and are drawn onto this canvas, which MediaPipe reads
+      MP.video = document.createElement('canvas'); MP.video.width = 960; MP.video.height = 540; MP.fromPhone = true;
+      startPhone('camera');
+    } else {
+      MP.fromPhone = false;
+      MP.stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      MP.video = document.createElement('video'); MP.video.playsInline = true; MP.video.muted = true; MP.video.srcObject = MP.stream; await MP.video.play();
+    }
     let fs = await FilesetResolver.forVisionTasks(MP_URL);
     let model = SET.mpModel === 'full' ? 'pose_landmarker_full/float16/1/pose_landmarker_full.task' : 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
     let make = (d, n) => PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/' + model, delegate: d },
@@ -257,16 +264,25 @@ function stopMediaPipe() {
   if (MP.stream) { MP.stream.getTracks().forEach(t => t.stop()); MP.stream = null; }
   for (let k of ['lm', 'hands']) { if (MP[k]) { try { MP[k].close(); } catch (e) {} MP[k] = null; } }
   if (MP.halves) { for (let h of MP.halves) { try { h.close(); } catch (e) {} } MP.halves = null; }
-  MP.found = []; MP.handsFound = [];
+  MP.found = []; MP.handsFound = []; MP.fromPhone = false;
+  if (typeof stopPhone === 'function') stopPhone();
 }
 // MediaPipe pose: 0 nose, 7/8 ears, 11/12 shoulders, 13/14 elbows, 15/16 wrists, 17/18 pinkies,
 // 19/20 index fingers, 21/22 thumbs, 23/24 hips, 25/26 knees, 27/28 ankles (left = the person's own left)
 const MPJ = { shL: 11, elL: 13, wrL: 15, piL: 17, inL: 19, thL: 21, shR: 12, elR: 14, wrR: 16, piR: 18, inR: 20, thR: 22,
   hipL: 23, knL: 25, anL: 27, hipR: 24, knR: 26, anR: 28 };
 function mpTick(now) {
-  if (!MP.running || !MP.video || MP.video.readyState < 2 || MP.video.currentTime === MP.last) return;
-  MP.last = MP.video.currentTime;
-  let W = MP.video.videoWidth, H = MP.video.videoHeight, tanH = Math.tan(SET.fov * Math.PI / 360), fpx = (W / 2) / tanH;
+  if (!MP.running || !MP.video) return;
+  if (MP.fromPhone) {   // a new picture from the iPhone? draw it onto the canvas MediaPipe reads
+    if (!PHONE.bmp || PHONE.bmpN === MP.last) return;
+    MP.last = PHONE.bmpN;
+    if (MP.video.width !== PHONE.bmp.width || MP.video.height !== PHONE.bmp.height) { MP.video.width = PHONE.bmp.width; MP.video.height = PHONE.bmp.height; }
+    MP.video.getContext('2d').drawImage(PHONE.bmp, 0, 0);
+  } else {
+    if (MP.video.readyState < 2 || MP.video.currentTime === MP.last) return;
+    MP.last = MP.video.currentTime;
+  }
+  let W = MP.video.videoWidth || MP.video.width, H = MP.video.videoHeight || MP.video.height, tanH = Math.tan(SET.fov * Math.PI / 360), fpx = (W / 2) / tanH;
   let found = [];
   if (MP.halves) {
     MP_HALVES.forEach((h, k) => {
@@ -771,7 +787,8 @@ let demoLast = 0;
 function setSource(src, deviceId) {
   SET.source = src;
   people[1] = null; people[2] = null; DEMO.reset = true; COMP.hist = []; COMP.x = null;
-  if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone(); }
+  if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone('body'); }
+  else if (src === 'mediapipe' && SET.tracker === 'phonecam') { stopPhone(); startMediaPipe(null, true); }
   else if (src === 'mediapipe') { stopPhone(); startMediaPipe(deviceId); }
   else { stopMediaPipe(); stopPhone(); TRK.status = 'demo people'; }
 }

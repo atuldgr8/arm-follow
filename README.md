@@ -7,6 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.16 (25 Oct): the iPhone as a wireless ultra-wide webcam
+
+- **Tracking → Tracker → iPhone camera, ultra-wide.** The Body Stream app streams its ultra-wide lens (about 106°, so a whole body fits from close by) and MediaPipe tracks it here, like DroidCam. The phone switches into camera mode by itself when asked; the field of view is set from the lens automatically.
+- Apple's body tracking only works with the main lens, so the two iPhone trackers are a trade-off: Apple's 3D skeleton with a narrow view, or MediaPipe with a wide one.
+- Tested here against a stand-in phone (pictures arrive, field of view set, switching back to body tracking works). MediaPipe itself couldn't load in the test container; on a real laptop it runs as with a webcam.
+
 ## v1.15 (25 Oct): cheat mode ⟷ regular
 
 - One switch (quick bar, key K) for every helper: hand assist, hold your place while reaching, solid plinths, see-through cube, first person near the cube, and the steadiest tracking (Feel 1.0, standing-still dead zone, quicker hands off). Regular turns them all off.
