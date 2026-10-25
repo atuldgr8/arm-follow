@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.18 (25 Oct): one Input list, and a Connect button that says how it's going
+
+- **Tracking → Input**: every webcam by name, the three iPhone modes and demo people, in one list (instead of Source + Tracker + Camera).
+- **Connect** shows Connecting… → **Connected ✓** (green, data arriving) / Connected · waiting / **Failed · retry** (red) / Reconnect.
+
 ## v1.17.1 (25 Oct): the iPhone's pictures turn with the phone
 
 - Body Stream's camera modes now turn the pictures (and the depth map) to match how the phone is held, so the phone's screen and the laptop's MediaPipe always see people upright. The phone sends the matching geometry, so the depth zone and the field of view follow too.

@@ -84,6 +84,7 @@ function toast(msg) { let t = $('toast'); t.textContent = msg; t.style.opacity =
 const PIP_BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [15, 17], [15, 19], [17, 19], [16, 18], [16, 20], [18, 20], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
 const HAND_BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
 function pipStep() {
+  phoneButton();
   let c = $('pip'); c.style.display = SET.pip ? 'block' : 'none'; if (!SET.pip) return;
   // the picture: the webcam's, or the small one the iPhone sends
   let pic = SET.source !== 'mediapipe' ? null : phoneOn() ? (PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null)
@@ -211,10 +212,50 @@ function toggleCheat() {
   for (let [id, key] of [['feel', 'smooth'], ['assist', 'assist'], ['stillz', 'stillZone']]) { let el = $(id); if (el) { el.value = SET[key]; el.dispatchEvent(new Event('input')); } }
   logEvent('cheat', { on: SET.cheat }); toast(SET.cheat ? 'Cheat mode: every helper on' : 'Regular: no helpers');
 }
+// the Input list shows what's in use now
+function showInput() {
+  let el = $('input'); if (!el || !el.options.length) return;
+  let v = SET.source === 'demo' ? 'demo' : SET.tracker !== 'webcam' ? SET.tracker : 'cam:' + ($('cam').value || '');
+  if ([...el.options].some(o => o.value === v)) el.value = v;
+  else if (v.startsWith('cam:') && el.options.length) el.selectedIndex = 0;
+}
+// the Connect button says how the link to the iPhone is doing
+function phoneButton() {
+  let b = $('btn-phone'); if (!b) return;
+  let t = 'Connect', c = '';
+  if (PHONE.state === 'connecting') { t = 'Connecting…'; }
+  else if (PHONE.state === 'open') {
+    let fresh = performance.now() - (PHONE.lastMsg || 0) < 1500;
+    t = fresh ? 'Connected ✓' : 'Connected · waiting'; c = fresh ? 'ok' : '';
+  }
+  else if (PHONE.state === 'failed') { t = 'Failed · retry'; c = 'bad'; }
+  else if (PHONE.state === 'closed') { t = 'Reconnect'; }
+  if (b.textContent !== t) b.textContent = t;
+  b.style.background = c === 'ok' ? '#12A150' : c === 'bad' ? '#E5372A' : ''; b.style.color = c ? '#fff' : ''; b.style.borderColor = c ? 'transparent' : '';
+}
 function setupPanel() {
   $('btn-cheat').onclick = () => { toggleCheat(); updatePanel(); };
   $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
-  cameraList().then(l => { $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join(''); });
+  // ONE INPUT LIST: every webcam by name, the three iPhone modes, demo people. It sets the source, the tracker
+  // and the camera together (those three stay underneath, hidden, as the rest of the code knows them).
+  let fillInput = l => {
+    $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join('');
+    let cams = l.map((c, i) => `<option value="cam:${c.deviceId}">Webcam · ${(c.label || 'Camera ' + (i + 1)).replace(/</g, '')}</option>`).join('') || '<option value="cam:">Webcam</option>';
+    $('input').innerHTML = cams + '<option value="iphone">iPhone · body tracking (Apple)</option><option value="phonecam">iPhone · ultra-wide camera</option><option value="phonedepth">iPhone · ultra-wide + LiDAR depth</option><option value="demo">Demo people (nobody needed)</option>';
+    showInput();
+  };
+  cameraList().then(fillInput);
+  $('input').onchange = e => {
+    let v = e.target.value; unlockPeople();
+    if (v === 'demo') { setSource('demo'); }
+    else {
+      SET.tracker = v.startsWith('cam:') ? 'webcam' : v;
+      try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {}
+      if (v.startsWith('cam:')) $('cam').value = v.slice(4);
+      setSource('mediapipe', $('cam').value);
+    }
+    RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel();
+  };
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
   $('tracker').value = SET.tracker; $('tracker').onchange = e => { SET.tracker = e.target.value; try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {} unlockPeople(); restartTracking(); updatePanel(); };
   $('phoneip').value = SET.phoneIP;
@@ -282,7 +323,7 @@ function updatePanel() {
   let quick = (id, on) => { let b = $(id); if (b) b.classList.toggle('on', !!on); };
   // a group that doesn't apply right now folds into one greyed line saying why
   let cond = (id, on) => { let g = $(id); if (g) g.classList.toggle('off', !on); };
-  $('tracker').value = SET.tracker; cond('g-phone', SET.tracker !== 'webcam'); cond('g-webcam', SET.tracker !== 'iphone');
+  showInput(); $('tracker').value = SET.tracker; cond('g-phone', SET.tracker !== 'webcam' && SET.source !== 'demo'); cond('g-webcam', SET.tracker !== 'iphone');
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';

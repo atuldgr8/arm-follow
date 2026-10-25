@@ -22,21 +22,23 @@ function startPhone(want) {
   stopPhone();
   PHONE.want = want || 'body';
   let a = phoneURL();
-  if (!a) { TRK.status = 'iPhone: type the address the Body Stream app shows, then Connect'; return; }
+  if (!a) { TRK.status = 'iPhone: type the address the Body Stream app shows, then Connect'; PHONE.state = 'idle'; return; }
   TRK.status = 'iPhone: connecting to ' + a + ' …';
   let ws;
   try { ws = new WebSocket('wss://' + a); } catch (e) { TRK.status = 'iPhone: ' + (e.message || e); return; }
   let pictures = PHONE.want !== 'body';
-  PHONE.ws = ws; ws.binaryType = pictures ? 'arraybuffer' : 'blob';
+  PHONE.ws = ws; ws.binaryType = pictures ? 'arraybuffer' : 'blob'; PHONE.state = 'connecting';
   let ask = () => { try { ws.send(JSON.stringify({ want: PHONE.want })); } catch (x) {} };
-  ws.onopen = () => { if (PHONE.ws !== ws) return; ask(); TRK.status = pictures ? 'iPhone camera: connected, waiting for pictures' : 'iPhone: connected, waiting for a body'; };
+  ws.onopen = () => { if (PHONE.ws !== ws) return; PHONE.state = 'open'; ask(); TRK.status = pictures ? 'iPhone camera: connected, waiting for pictures' : 'iPhone: connected, waiting for a body'; };
   ws.onerror = () => {
     if (PHONE.ws !== ws) return;
+    PHONE.state = 'failed';
     TRK.status = 'iPhone: could not connect to ' + a + '. Once per laptop: open https://' + a + ' in a new tab, choose Advanced → Proceed, then press Connect again. Same Wi-Fi as the phone?';
   };
-  ws.onclose = () => { if (PHONE.ws === ws) { PHONE.ws = null; if (!/could not connect/.test(TRK.status)) TRK.status = 'iPhone: disconnected (press Connect)'; } };
+  ws.onclose = () => { if (PHONE.ws === ws) { PHONE.ws = null; if (PHONE.state !== 'failed') PHONE.state = 'closed'; if (!/could not connect/.test(TRK.status)) TRK.status = 'iPhone: disconnected (press Connect)'; } };
   ws.onmessage = e => {
     if (PHONE.ws !== ws) return;
+    PHONE.lastMsg = performance.now();
     if (typeof e.data !== 'string' && pictures) {
       let buf = e.data, u8 = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
       if (u8[0] === 68 && u8[1] === 80 && u8[2] === 84 && u8[3] === 72) {   // "DPTH": a depth map
@@ -72,6 +74,7 @@ function startPhone(want) {
 }
 function stopPhone() {
   if (PHONE.ws) { let w = PHONE.ws; PHONE.ws = null; try { w.close(); } catch (e) {} }
+  PHONE.state = 'idle';
   PHONE.msg = null; PHONE.fresh = false; PHONE.img = null; PHONE.f = {}; PHONE.depth = null; PHONE.cam = null;
   if (PHONE.bmp && PHONE.bmp.close) PHONE.bmp.close(); PHONE.bmp = null; PHONE.decoding = false;
   if (PHONE.url) { URL.revokeObjectURL(PHONE.url); PHONE.url = null; }
