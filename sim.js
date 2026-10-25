@@ -79,15 +79,22 @@ function composeAvatar(dt) {
 }
 
 // SOLID: the plinths (and the cube on them) can't be walked into. A body is about 30 cm around the
-// middle, so it's kept that far from a plinth's sides and slides along them.
+// middle, so it's kept that far from a plinth's sides. Walking into one just STOPS you where you were
+// (v1.18.6: it used to push you out the shortest way, which near a corner shoved you sideways).
+const SOLID = { last: null };
 function solidPush(vp) {
-  let r = PLINTH.w / 2 + 0.3, x = vp.x, z = vp.z;
+  let r = PLINTH.w / 2 + 0.3, inside = q => (TARGET.on ? [PLINTH.p, TARGET.p] : [PLINTH.p]).some(P => Math.abs(q.x - P.x) < r && Math.abs(q.z - P.z) < r);
+  if (!inside(vp)) { SOLID.last = { x: vp.x, z: vp.z }; return vp; }
+  if (SOLID.last && !inside(SOLID.last) && Math.hypot(vp.x - SOLID.last.x, vp.z - SOLID.last.z) < 1) return { x: SOLID.last.x, z: SOLID.last.z };   // stay put
+  // only if you were already inside (a plinth appeared on top of you): out by the shortest way, as before
+  let x = vp.x, z = vp.z;
   for (let P of TARGET.on ? [PLINTH.p, TARGET.p] : [PLINTH.p]) {
     let dx = x - P.x, dz = z - P.z;
-    if (Math.abs(dx) < r && Math.abs(dz) < r) {   // inside: out by the shortest way
+    if (Math.abs(dx) < r && Math.abs(dz) < r) {
       if (r - Math.abs(dx) < r - Math.abs(dz)) x = P.x + Math.sign(dx || 1) * r; else z = P.z + Math.sign(dz || 1) * r;
     }
   }
+  SOLID.last = { x, z };
   return { x, z };
 }
 // REACHING HOLDS YOUR PLACE (a game-like cut): within reach of the cube, or of the plinth while you hold

@@ -376,15 +376,19 @@ function cameraStep(S, dt, b) {
   let f = smooth01(SC.fp);
   // the first-person eye follows a calmed copy of the head (and looks at a calmed target), so the view
   // stays steady even when tracking gets less sure close to the cube
-  // and only half of your leaning moves it (the body below is held still near the cube, sim.js reachHold)
-  let lean = b.head.clone().sub(b.pelvis).setY(0).multiplyScalar(0.5);
-  let eyeRaw = b.head.clone().sub(lean).addScaledVector(fwd, 0.1).add(new V3(0, 0.03, 0));
+  // v1.18.6: the eye sits on your head and looks WHERE YOUR BODY FACES (a calmed heading), tipped down
+  // toward the hands. It never swings round to keep the cube centred.
+  let eyeRaw = b.head.clone().add(new V3(0, 0.03, 0));
   if (!SC.eyeS || SC.eyeS.distanceTo(eyeRaw) > 1.5) SC.eyeS = eyeRaw.clone();
-  SC.eyeS.lerp(eyeRaw, Math.min(1, dt * 1.6));
-  let focusRaw = S.cube.held && carry && S.target ? new V3(S.target[0], PLINTH.h + 0.1, S.target[1]) : (SC.cubeS ? SC.cubeS.clone() : c.clone());
-  if (!SC.focusS || SC.focusS.distanceTo(focusRaw) > 3) SC.focusS = focusRaw.clone();
-  SC.focusS.lerp(focusRaw, Math.min(1, dt * 2));
-  if (f > 0.001) { want.lerp(SC.eyeS, f); look.lerp(SC.focusS, f); }
+  SC.eyeS.lerp(eyeRaw, Math.min(1, dt * 2.5));
+  let hT = (S.yaw || 0) * Math.PI / 180;
+  if (SC.headY === undefined || f < 0.001) SC.headY = hT;
+  let dh = hT - SC.headY; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
+  SC.headY += dh * Math.min(1, dt * 2);
+  let hf = new V3(Math.sin(SC.headY), 0, -Math.cos(SC.headY));
+  let eyeF = SC.eyeS.clone().addScaledVector(hf, 0.1);
+  let lookF = eyeF.clone().addScaledVector(hf, 1).add(new V3(0, -0.55, 0));
+  if (f > 0.001) { want.lerp(eyeF, f); look.lerp(lookF, f); }
   let fovT = 55 + 25 * f;
   if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov = fovT; cam.updateProjectionMatrix(); }
   let k = Math.min(1, dt * (5 - 2.5 * SC.exam + 4 * f));   // calmer while examining; follows the calmed eye in first person

@@ -137,8 +137,10 @@ function pipStep() {
       if (miss.length) { x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(229,55,42,0.95)'; x.font = 'bold 12px monospace'; x.fillText('P' + miss.join('+P') + ' not matched · Setup re-picks who is followed', 8, h - 10); x.restore(); }
     }
     // iPhone ultra-wide + LiDAR: the zone the depth map covers, and rings on the joints it measured
-    if (SET.tracker === 'phonedepth' && SET.pipDepth) {
+    if ((SET.tracker === 'phonedepth' || SET.tracker === 'webdepth') && SET.pipDepth) {
       let Z = depthZone();
+      // webcam + depth: the LiDAR's zone as the webcam sees it (only once the cameras are lined up)
+      if (Z && SET.tracker === 'webdepth') { if (alignReady()) { let a = alignInv(Z.x0, Z.y0), b = alignInv(Z.x1, Z.y1); Z = { x0: a.u, y0: a.v, x1: b.u, y1: b.v }; } else Z = null; }
       if (Z) {
         x.strokeStyle = 'rgba(64,200,224,0.9)'; x.lineWidth = 2; x.setLineDash([7, 5]); x.strokeRect(Z.x0 * w, Z.y0 * h, (Z.x1 - Z.x0) * w, (Z.y1 - Z.y0) * h); x.setLineDash([]);
         x.save(); x.translate(Z.x0 * w + 4, Z.y0 * h + 12); if (SET.mirror) { x.translate((Z.x1 - Z.x0) * w - 8, 0); x.scale(-1, 1); x.textAlign = 'right'; } x.fillStyle = 'rgba(64,200,224,1)'; x.font = 'bold 10px monospace'; x.fillText('LiDAR', 0, 0); x.restore();
@@ -223,9 +225,10 @@ function toggleCheat() {
 // the Input list shows what's in use now
 function showInput() {
   let el = $('input'); if (!el || !el.options.length) return;
-  let v = SET.source === 'demo' ? 'demo' : SET.tracker !== 'webcam' ? SET.tracker : 'cam:' + ($('cam').value || '');
+  let v = SET.source === 'demo' ? 'demo' : SET.tracker === 'webdepth' ? 'webdepth:' + ($('cam').value || '') : SET.tracker !== 'webcam' ? SET.tracker : 'cam:' + ($('cam').value || '');
   if ([...el.options].some(o => o.value === v)) el.value = v;
   else if (v.startsWith('cam:') && el.options.length) el.selectedIndex = 0;
+  else if (v.startsWith('webdepth:')) { let o = [...el.options].find(o => o.value.startsWith('webdepth:')); if (o) el.value = o.value; }
 }
 // the Connect button says how the link to the iPhone is doing
 function phoneButton() {
@@ -240,7 +243,7 @@ function phoneButton() {
   else if (PHONE.state === 'closed') { t = 'Reconnect'; }
   if (b.textContent !== t) b.textContent = t;
   // what the link is doing, in words, right under the button (the stats can be hidden behind the getting-ready card)
-  let ps = $('phone-status'), st = SET.tracker !== 'webcam' && SET.source === 'mediapipe' ? TRK.status : '';
+  let ps = $('phone-status'), st = SET.tracker === 'webdepth' && SET.source === 'mediapipe' ? depthStatus() : SET.tracker !== 'webcam' && SET.source === 'mediapipe' ? TRK.status : '';
   if (ps && ps.textContent !== st) ps.textContent = st;
   b.style.background = c === 'ok' ? '#12A150' : c === 'bad' ? '#E5372A' : ''; b.style.color = c ? '#fff' : ''; b.style.borderColor = c ? 'transparent' : '';
 }
@@ -253,7 +256,8 @@ function setupPanel() {
   let fillInput = l => {
     $('cam').innerHTML = l.map((c, i) => `<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>`).join('');
     let cams = l.map((c, i) => `<option value="cam:${c.deviceId}">Webcam · ${(c.label || 'Camera ' + (i + 1)).replace(/</g, '')}</option>`).join('') || '<option value="cam:">Webcam</option>';
-    $('input').innerHTML = cams + '<option value="iphone">iPhone · body tracking (Apple)</option><option value="phonecam">iPhone · ultra-wide camera</option><option value="phonedepth">iPhone · ultra-wide + LiDAR depth</option><option value="demo">Demo people (nobody needed)</option>';
+    let combos = l.map((c, i) => `<option value="webdepth:${c.deviceId}">Webcam + iPhone depth · ${(c.label || 'Camera ' + (i + 1)).replace(/</g, '')}</option>`).join('') || '<option value="webdepth:">Webcam + iPhone depth</option>';
+    $('input').innerHTML = cams + combos + '<option value="iphone">iPhone · body tracking (Apple)</option><option value="phonecam">iPhone · ultra-wide camera</option><option value="phonedepth">iPhone · ultra-wide + LiDAR depth</option><option value="demo">Demo people (nobody needed)</option>';
     showInput();
   };
   cameraList().then(fillInput);
@@ -261,9 +265,10 @@ function setupPanel() {
     let v = e.target.value; unlockPeople();
     if (v === 'demo') { setSource('demo'); }
     else {
-      SET.tracker = v.startsWith('cam:') ? 'webcam' : v;
+      SET.tracker = v.startsWith('cam:') ? 'webcam' : v.startsWith('webdepth:') ? 'webdepth' : v;
       try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {}
       if (v.startsWith('cam:')) $('cam').value = v.slice(4);
+      if (v.startsWith('webdepth:')) $('cam').value = v.slice(9);
       setSource('mediapipe', $('cam').value);
     }
     RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel();

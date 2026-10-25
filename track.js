@@ -257,13 +257,20 @@ async function startMediaPipe(deviceId, fromPhone) {
         runningMode: 'VIDEO', numHands: n, minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
       MP.hands = await either(mkH, SET.spaces === 1 && SET.comp === 'off' ? 4 : 2);
     }
+    if (SET.tracker === 'webdepth' && !fromPhone) {
+      // webcam + iPhone depth: a light second body model reads the phone's pictures, to line the two cameras up (phone.js)
+      MP.phoneLm = await either((d, n) => PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: d },
+        runningMode: 'VIDEO', numPoses: n, minPoseDetectionConfidence: 0.4, minPosePresenceConfidence: 0.4, minTrackingConfidence: 0.3 }), 1);
+      alignReset();
+      startPhone('depth');
+    }
     MP.running = true; TRK.status = 'MediaPipe: running';
   } catch (e) { TRK.status = 'MediaPipe error: ' + (e.message || e); }
 }
 function stopMediaPipe() {
   MP.running = false;
   if (MP.stream) { MP.stream.getTracks().forEach(t => t.stop()); MP.stream = null; }
-  for (let k of ['lm', 'hands']) { if (MP[k]) { try { MP[k].close(); } catch (e) {} MP[k] = null; } }
+  for (let k of ['lm', 'hands', 'phoneLm']) { if (MP[k]) { try { MP[k].close(); } catch (e) {} MP[k] = null; } }
   if (MP.halves) { for (let h of MP.halves) { try { h.close(); } catch (e) {} } MP.halves = null; }
   MP.found = []; MP.handsFound = []; MP.fromPhone = false;
   if (typeof stopPhone === 'function') stopPhone();
@@ -309,6 +316,7 @@ function mpTick(now) {
   }
   MP.handsFound = MP.handsFound.filter(h => now - h.t < 250);
   processFound(found, now, W, H);
+  if (MP.phoneLm) alignTick(now, found);   // webcam + iPhone depth: keep the two cameras lined up
 }
 // everything after the body model: who is who, filtering, and building each followed person in metres
 function processFound(found, now, W, H) {
@@ -401,7 +409,7 @@ const rotX = (v, a) => { let c = Math.cos(a), s = Math.sin(a); return { x: v.x, 
 function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   let M = MPF[slot] || (MPF[slot] = { lm: [], wl: [], d: null, arm: {} });
   // iPhone ultra-wide + LiDAR: real distances for the joints the depth map covers (phone.js)
-  let DZ = SET.tracker === 'phonedepth' ? fuseDepth(c) : null;
+  let DZ = SET.tracker === 'phonedepth' || SET.tracker === 'webdepth' ? fuseDepth(c) : null;
   if (DZ) c = Object.assign({}, c, { wl: DZ.wl });
   M.meas = DZ ? DZ.meas : null;
   let t = now / 1000, fz = feelPx();

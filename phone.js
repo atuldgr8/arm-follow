@@ -13,7 +13,7 @@
 const PHONE = { ws: null, ix: null, msg: null, fresh: false, img: null, url: null, f: {}, seen: 0, want: 'body', bmp: null, bmpN: 0, decoding: false, cam: null, depth: null };
 function phoneOn() { return SET.source === 'mediapipe' && SET.tracker === 'iphone'; }
 function phoneURL() { let a = (SET.phoneIP || '').trim().replace(/^\w+:\/\//, '').replace(/\/.*$/, ''); return a ? (a.includes(':') ? a : a + ':8443') : ''; }
-const PHONE_WANT = { iphone: 'body', phonecam: 'camera', phonedepth: 'depth' };   // Arm Follow's tracker → the phone's mode
+const PHONE_WANT = { iphone: 'body', phonecam: 'camera', phonedepth: 'depth', webdepth: 'depth' };   // Arm Follow's tracker → the phone's mode
 
 // want: 'body' (Apple's body tracking, the skeleton comes over), 'camera' (the ultra-wide pictures come over and
 // MediaPipe runs on them here, like a wireless webcam) or 'depth' (the same, plus the LiDAR's depth map for the
@@ -64,7 +64,8 @@ function startPhone(want) {
       if (m.problem) TRK.status = 'iPhone: ' + m.problem;
       // the lens's real field of view, so distances are judged right
       let hf = m.hfov || m.fov;   // across the picture as sent (an upright phone turns its picture a quarter)
-      if (hf && Math.abs(SET.fov - Math.round(hf)) >= 1) { SET.fov = Math.round(hf); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
+      // (webcam + depth: the fov stays the webcam's)
+      if (hf && SET.tracker !== 'webdepth' && Math.abs(SET.fov - Math.round(hf)) >= 1) { SET.fov = Math.round(hf); let el = document.getElementById('fov'); if (el) { el.value = SET.fov; el.dispatchEvent(new Event('input')); } }
       return;
     }
     if (pictures) { if (!PHONE.asked || performance.now() - PHONE.asked > 1000) { PHONE.asked = performance.now(); ask(); } return; }   // still in body mode: ask again
@@ -112,19 +113,91 @@ const DEPTH_IN = i => (i === 11 || i === 12 || i === 23 || i === 24) ? 0.09 : i 
 // MediaPipe's joints with real distances where the depth map has them. Returns { wl, T, meas } (wl: hip-centred
 // metres, as MediaPipe's own; T: the hips' place from the camera; meas: which joints were measured) or null.
 function fuseDepth(c) {
-  let cm = PHONE.cam;
+  let cm = PHONE.cam, web = SET.tracker === 'webdepth';
   if (!PHONE.depth || !cm || performance.now() - PHONE.depth.t > 400) return null;
-  // half the view across and up-down, as slopes (from the phone, which knows which way it's held)
-  let tx = cm.tx || Math.tan(cm.fov * Math.PI / 360), ty = cm.ty || tx * (cm.H || 540) / (cm.W || 960);
+  if (web && !alignReady()) return null;   // webcam + depth: until the two cameras are lined up, the webcam guesses as usual
+  // half the view across and up-down, as slopes (from the phone, which knows which way it's held; or the webcam's)
+  let tx, ty;
+  if (web) { let wt = webTan(); tx = wt.tx; ty = wt.ty; }
+  else { tx = cm.tx || Math.tan(cm.fov * Math.PI / 360); ty = cm.ty || tx * (cm.H || 540) / (cm.W || 960); }
   let P = c.lm.map((q, i) => {
     if (!q || (q.visibility !== undefined && q.visibility < 0.5)) return null;
-    let z = depthAt(q.x, q.y); if (!z) return null;
+    let pu = web ? alignMap(q.x, q.y) : { u: q.x, v: q.y };
+    let z = depthAt(pu.u, pu.v); if (!z) return null;
     z += DEPTH_IN(i);
     return { x: (q.x - 0.5) * 2 * tx * z, y: (q.y - 0.5) * 2 * ty * z, z };
   });
   if (!P[23] || !P[24]) return null;   // the hips must be measured, or nothing is placed by depth
   let H = { x: (P[23].x + P[24].x) / 2, y: (P[23].y + P[24].y) / 2, z: (P[23].z + P[24].z) / 2 };
   return { wl: c.wl.map((w, i) => P[i] ? { x: P[i].x - H.x, y: P[i].y - H.y, z: P[i].z - H.z } : w), T: H, meas: P.map(p => !!p) };
+}
+
+// ---------------- WEBCAM + iPHONE DEPTH (tracker: webdepth) ----------------
+// The webcam finds the body (MediaPipe, where it is strongest); the iPhone, standing right beside the
+// webcam and facing the same way, measures how far away each joint is (its LiDAR). To know which spot in
+// the phone's picture a webcam point is, the two are LINED UP AUTOMATICALLY: a second, light body model
+// reads the phone's own pictures a few times a second, and the same joints seen by both cameras are fitted
+// with a straight line per direction (scale and offset in viewing angle), forgetting old frames slowly. No
+// clicking, no markers: stand where both can see you for a few seconds. Until then the webcam guesses as usual.
+const ALIGN = { x: null, y: null, w: 0, last: 0, can: null };
+const ALIGN_J = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+function alignReset() { ALIGN.x = [0, 0, 0, 0, 0]; ALIGN.y = [0, 0, 0, 0, 0]; ALIGN.w = 0; ALIGN.last = 0; }
+alignReset();
+function webTan() {
+  let v = MP.video, W = (v && (v.videoWidth || v.width)) || 1280, H = (v && (v.videoHeight || v.height)) || 720;
+  let tx = Math.tan(SET.fov * Math.PI / 360); return { tx, ty: tx * H / W };
+}
+function alignReady() { return ALIGN.w > 12; }
+// the fitted line: phone picture coordinate = A × (webcam viewing slope) + B. Before enough data (and as a
+// gentle pull when you stand still in one place), the lenses' fields of view say A, and B is the middle.
+function alignLine(S, prior) {
+  let [w, sx, sy, sxx, sxy] = S, lam = 0.05;
+  if (w < 1) return { A: prior, B: 0.5 };
+  let cxx = sxx - sx * sx / w, cxy = sxy - sx * sy / w;
+  let A = (cxy + lam * prior) / (cxx + lam), B = (sy - A * sx) / w;
+  if (!(A > prior * 0.5 && A < prior * 2)) A = prior;
+  return { A, B };
+}
+function alignLines() {
+  let cm = PHONE.cam || {}, ptx = cm.tx || Math.tan((cm.fov || 106) * Math.PI / 360), pty = cm.ty || ptx * 0.5625;
+  return { X: alignLine(ALIGN.x, 1 / (2 * ptx)), Y: alignLine(ALIGN.y, 1 / (2 * pty)) };
+}
+function alignMap(u, v) {
+  let t = webTan(), L = alignLines();
+  return { u: L.X.A * (u - 0.5) * 2 * t.tx + L.X.B, v: L.Y.A * (v - 0.5) * 2 * t.ty + L.Y.B };
+}
+function alignInv(u, v) {   // a phone picture point → where it is in the webcam's picture
+  let t = webTan(), L = alignLines();
+  return { u: 0.5 + (u - L.X.B) / L.X.A / (2 * t.tx), v: 0.5 + (v - L.Y.B) / L.Y.A / (2 * t.ty) };
+}
+// a few times a second: the body model on the phone's picture, matched joint by joint with the webcam's
+function alignTick(now, webFound) {
+  if (SET.tracker !== 'webdepth' || !MP.phoneLm || !PHONE.bmp || PHONE.bmpN === ALIGN.bmpN || now - ALIGN.last < 220) return;
+  ALIGN.last = now; ALIGN.bmpN = PHONE.bmpN;
+  if (webFound.length !== 1) return;   // one person in view of the webcam, or we can't be sure who is who
+  let c = ALIGN.can || (ALIGN.can = document.createElement('canvas'));
+  if (c.width !== PHONE.bmp.width || c.height !== PHONE.bmp.height) { c.width = PHONE.bmp.width; c.height = PHONE.bmp.height; }
+  c.getContext('2d').drawImage(PHONE.bmp, 0, 0);
+  let r; try { r = MP.phoneLm.detectForVideo(c, now); } catch (e) { return; }
+  let pl = r.landmarks && r.landmarks[0], wl = webFound[0].lm; if (!pl || !wl) return;
+  let t = webTan(), k = 0.98;   // older frames fade out (half gone in about 10 s)
+  for (let i = 0; i < 5; i++) { ALIGN.x[i] *= k; ALIGN.y[i] *= k; }
+  ALIGN.w *= k;
+  let ok = q => q && (q.visibility === undefined || q.visibility > 0.7) && q.x > 0.02 && q.x < 0.98 && q.y > 0.02 && q.y < 0.98;
+  for (let i of ALIGN_J) {
+    let a = wl[i], b = pl[i]; if (!ok(a) || !ok(b)) continue;
+    let sx = (a.x - 0.5) * 2 * t.tx, sy = (a.y - 0.5) * 2 * t.ty;
+    for (let [S, x, y] of [[ALIGN.x, sx, b.x], [ALIGN.y, sy, b.y]]) { S[0] += 1; S[1] += x; S[2] += y; S[3] += x * x; S[4] += x * y; }
+    ALIGN.w += 1;
+  }
+}
+// what the iPhone part is doing, in words (under the Connect button)
+function depthStatus() {
+  if (!PHONE.ws) return TRK.status;
+  if (!PHONE.depth) return 'iPhone: connected, waiting for depth (is the phone in Camera + depth mode?)';
+  if (!alignReady()) return 'Lining up the two cameras… stand where both can see all of you';
+  let M = MPF[1] || MPF[2], n = M && M.meas ? M.meas.filter(Boolean).length : 0;
+  return 'Lined up ✓ · LiDAR measures ' + n + ' of 33 joints' + (n && M.meas[23] && M.meas[24] ? ' · where you stand: measured' : ' · hips outside the LiDAR zone');
 }
 
 // Apple's joint names → this prototype's (first name found wins)

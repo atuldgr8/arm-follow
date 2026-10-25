@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.18.6 (26 Oct): webcam + iPhone depth, podiums stop you, first person turns with you
+- **Webcam + iPhone depth** (Input list, one per webcam). The webcam finds your body; the iPhone, right beside the webcam and facing the same way, in **Camera + depth** mode, measures how far away each joint is with its LiDAR, including where you stand. The two cameras **line themselves up**: a second, light body model reads the phone's pictures a few times a second and fits the same joints seen by both. Stand where both see all of you for a few seconds. Under Connect it says "Lining up…", then "Lined up ✓ · LiDAR measures N of 33 joints". Until lined up, the webcam guesses as before. The camera view shows the LiDAR zone (cyan) on the webcam picture and rings the measured joints. No phone app update needed.
+- **Solid podiums just stop you** where you were, instead of pushing you out sideways.
+- **First person turns with your body only:** the eye sits on your head and looks where your body faces, tipped down to the hands. It no longer swings round to keep the cube centred.
+
 ## v1.18.5 (26 Oct): calmer near the cube, and a floor the camera can actually see
 - **First person near the cube is sticky:** it switches in at the examine distance, only switches out 0.7 m further away, and never flips twice within 1.5 s. Before, hovering near the line flipped the view back and forth.
 - **Near the cube, you move a quarter as much:** the hold starts at the same distance as first person. Inside about 20 cm of real floor the body moves a quarter of your movement; a real step still walks you. The first-person eye takes only half your lean and follows more slowly.
