@@ -42,6 +42,20 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     private(set) var orient: CGImagePropertyOrientation = .up
     private(set) var sensorW = 0, sensorH = 0     // the picture as the sensor gives it, before turning
     private let motion = CMMotionManager()
+    private(set) var flat = false                 // lying flat (or aimed straight up/down): keeping the last turn
+    // how the phone thinks it's held, in words (shown on the phone and in Arm Follow's camera view)
+    var heldLabel: String {
+        var s: String = "on its side"
+        switch orient {
+        case .up: s = "on its side, top to the left"
+        case .down: s = "on its side, top to the right"
+        case .right: s = "upright"
+        case .left: s = "upside down"
+        default: break
+        }
+        if flat { s = "flat, so keeping: " + s }
+        return s
+    }
     var sideways: Bool { orient == .right || orient == .left }   // phone held upright: the picture is turned a quarter
 
     // Which way the phone is held comes from gravity (the motion sensor), as camera apps do. iPhone's own
@@ -52,7 +66,8 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
             guard let self = self, let g = m?.gravity else { return }
             let ax = abs(g.x), ay = abs(g.y)
-            if max(ax, ay) < 0.5 { return }                 // lying flat: keep the last turn
+            if max(ax, ay) < 0.5 { self.flat = true; return }   // lying flat: keep the last turn
+            self.flat = false
             if ax > ay * 1.3 {
                 self.orient = g.x < 0 ? .up : .down          // on its side: top to the left = the sensor's own way round
             } else if ay > ax * 1.3 {

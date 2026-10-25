@@ -169,7 +169,7 @@ function pipStep() {
     }
     x.fillStyle = '#8a95a1'; x.font = '10px monospace'; x.fillText('moved since attached', cx - 55, cy + 68);
   }
-  x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
+  x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands' + (MP.fromPhone && PHONE.cam && PHONE.cam.held ? ' · phone ' + PHONE.cam.held : '') + ' · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
 }
 
 // ---------------- log [O] ----------------

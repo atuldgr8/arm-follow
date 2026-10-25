@@ -216,7 +216,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             else {
                 var name: String = "Ultra-wide camera"
                 if mode == "depth" { name = "Ultra-wide + depth" }
-                line2 = name + ", \(Int(c.fov))° · camera \(fps) fps"
+                line2 = name + ", \(Int(c.fov))° · held " + c.heldLabel + " · camera \(fps) fps"
                 if c.depthOn { line2 += " · LiDAR \(dps) fps (every other one sent, \(c.depthW)×\(c.depthH))" }
                 if clientCount > 0 { line2 += " · sending \(camSent)/s" }
             }
@@ -266,6 +266,7 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
         meta["dH"] = c.depthH
         meta["depth"] = c.depthOn
         meta["upright"] = c.sideways
+        meta["held"] = c.heldLabel
         meta["problem"] = c.problem
         if let data = try? JSONSerialization.data(withJSONObject: meta) { send(data, binary: false) }
         pictureAspect = c.width > 0 && c.height > 0 ? CGFloat(c.width) / CGFloat(c.height) : 4.0 / 3.0
