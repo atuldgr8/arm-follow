@@ -41,7 +41,7 @@ struct CameraView: UIViewRepresentable {
     let tracker: Tracker
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
-        tracker.start(session: view.session)
+        DispatchQueue.main.async { tracker.start(session: view.session) }   // after the screen is drawn (SwiftUI warns otherwise)
         return view
     }
     func updateUIView(_ uiView: ARView, context: Context) {}
