@@ -91,7 +91,9 @@ function pipStep() {
     : MP.fromPhone ? (PHONE.bmp ? { el: MP.video, w: MP.video.width, h: MP.video.height } : null)
     : MP.video && MP.video.readyState >= 2 ? { el: MP.video, w: MP.video.videoWidth, h: MP.video.videoHeight } : null;
   let cam = !!pic;
+  // 400 wide; a tall picture (phone held upright) is capped at 300 high so it never covers the screen
   let w = 400, h = cam ? Math.round(w * pic.h / pic.w) : 260;
+  if (h > 300) { w = Math.round(300 * pic.w / pic.h); h = 300; }
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   let x = c.getContext('2d');
   x.clearRect(0, 0, w, h); x.fillStyle = 'rgba(0,0,0,0.7)'; x.fillRect(0, 0, w, h);

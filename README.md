@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.18.2 (25 Oct)
+
+- The camera view never grows taller than 300 px (a phone held upright sent a tall picture that covered the screen).
+- Body Stream v6: which way the phone is held now comes from gravity. iPhone's own orientation stays on "upright" when Rotation Lock is on, so a phone on its side sent sideways pictures, and MediaPipe laid the body down.
+
 ## v1.18.1 (25 Oct)
 
 - The iPhone link's status shows in words right under Connect (it was only in the stats, which the getting-ready card covers).

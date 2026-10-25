@@ -7,6 +7,7 @@
 // Apple's own body tracking only works with the main lens, so these modes have no ARKit skeleton.
 
 import AVFoundation
+import CoreMotion
 import CoreImage
 import ImageIO
 import UIKit
@@ -40,24 +41,23 @@ final class CameraStreamer: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
     // always see people upright. Face up / face down keep the last turn.
     private(set) var orient: CGImagePropertyOrientation = .up
     private(set) var sensorW = 0, sensorH = 0     // the picture as the sensor gives it, before turning
-    private var orientObs: NSObjectProtocol?
+    private let motion = CMMotionManager()
     var sideways: Bool { orient == .right || orient == .left }   // phone held upright: the picture is turned a quarter
 
+    // Which way the phone is held comes from gravity (the motion sensor), as camera apps do. iPhone's own
+    // "orientation" stays stuck on upright when Rotation Lock is on, which turned landscape pictures sideways.
     override init() {
         super.init()
-        DispatchQueue.main.async {
-            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-            let update: () -> Void = { [weak self] in
-                switch UIDevice.current.orientation {
-                case .portrait: self?.orient = .right
-                case .portraitUpsideDown: self?.orient = .left
-                case .landscapeLeft: self?.orient = .up       // home side on the right: the sensor's own way round
-                case .landscapeRight: self?.orient = .down
-                default: break
-                }
-            }
-            update()
-            self.orientObs = NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in update() }
+        motion.deviceMotionUpdateInterval = 0.2
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+            guard let self = self, let g = m?.gravity else { return }
+            let ax = abs(g.x), ay = abs(g.y)
+            if max(ax, ay) < 0.5 { return }                 // lying flat: keep the last turn
+            if ax > ay * 1.3 {
+                self.orient = g.x < 0 ? .up : .down          // on its side: top to the left = the sensor's own way round
+            } else if ay > ax * 1.3 {
+                self.orient = g.y < 0 ? .right : .left       // upright, or upside down
+            }                                                // in between: keep the last turn (no flicker)
         }
     }
 

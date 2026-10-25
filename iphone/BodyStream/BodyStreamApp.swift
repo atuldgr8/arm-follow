@@ -50,7 +50,7 @@ struct ContentView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 6) {
-                Text("BODY STREAM v5 (25 Oct 22:55) · type this into Arm Follow")   // the version: change it with every update, so you can see the new one is installed
+                Text("BODY STREAM v6 (25 Oct 23:10) · type this into Arm Follow")   // the version: change it with every update, so you can see the new one is installed
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                 Text(tracker.address)
                     .font(.system(size: 30, weight: .bold, design: .monospaced))
