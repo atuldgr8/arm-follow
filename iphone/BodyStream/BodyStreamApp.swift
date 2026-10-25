@@ -18,6 +18,17 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             CameraView(tracker: tracker).ignoresSafeArea()
+            // the tracked skeleton, drawn over the camera
+            Canvas { ctx, _ in
+                var path = Path()
+                var i = 0
+                while i + 1 < tracker.lines.count {
+                    path.move(to: tracker.lines[i]); path.addLine(to: tracker.lines[i + 1]); i += 2
+                }
+                ctx.stroke(path, with: .color(.yellow), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 6) {
                 Text("BODY STREAM · type this into Arm Follow")
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
@@ -41,6 +52,7 @@ struct CameraView: UIViewRepresentable {
     let tracker: Tracker
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        tracker.view = view
         DispatchQueue.main.async { tracker.start(session: view.session) }   // after the screen is drawn (SwiftUI warns otherwise)
         return view
     }

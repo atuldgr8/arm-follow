@@ -13,6 +13,7 @@
 import Foundation
 import Combine   // ObservableObject and @Published live here
 import ARKit
+import RealityKit
 import Network
 import CoreImage
 import ImageIO
@@ -21,6 +22,17 @@ import UIKit
 final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
     @Published var address = "starting…"
     @Published var status = "starting…"
+    @Published var lines: [CGPoint] = []   // the skeleton on the phone's screen: pairs of points, one pair per bone
+    weak var view: ARView?
+    private var bonePairs: [(Int, Int)] = []
+    private static let boneNames: [(String, String)] = [
+        ("hips_joint", "spine_7_joint"), ("spine_7_joint", "neck_1_joint"), ("neck_1_joint", "head_joint"),
+        ("left_arm_joint", "right_arm_joint"), ("left_upLeg_joint", "right_upLeg_joint"),
+        ("left_arm_joint", "left_forearm_joint"), ("left_forearm_joint", "left_hand_joint"),
+        ("right_arm_joint", "right_forearm_joint"), ("right_forearm_joint", "right_hand_joint"),
+        ("left_upLeg_joint", "left_leg_joint"), ("left_leg_joint", "left_foot_joint"),
+        ("right_upLeg_joint", "right_leg_joint"), ("right_leg_joint", "right_foot_joint"),
+    ]
 
     private let port: NWEndpoint.Port = 8443
     private var listener: NWListener?
@@ -40,6 +52,10 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             return
         }
         names = ARSkeletonDefinition.defaultBody3D.jointNames
+        bonePairs = Tracker.boneNames.compactMap { a, b in
+            guard let i = names.firstIndex(of: a), let k = names.firstIndex(of: b) else { return nil }
+            return (i, k)
+        }
         session.delegate = self
         let config = ARBodyTrackingConfiguration()
         config.automaticSkeletonScaleEstimationEnabled = true   // learns your real size
@@ -65,11 +81,12 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             if simd_length(fwd) < 0.01 { fwd = SIMD3<Float>(0, 0, -1) }
             fwd = simd_normalize(fwd)
             let right = simd_cross(fwd, SIMD3<Float>(0, 1, 0))
-            var p: [Double] = [], u: [Double] = []
+            var p: [Double] = [], u: [Double] = [], worlds: [SIMD3<Float>] = []
             p.reserveCapacity(names.count * 3); u.reserveCapacity(names.count * 2)
             for m in body.skeleton.jointModelTransforms {
                 let w = body.transform * m
                 let world = SIMD3<Float>(w.columns.3.x, w.columns.3.y, w.columns.3.z)
+                worlds.append(world)
                 let r = world - camPos
                 p.append(Tracker.round3(simd_dot(r, right)))
                 p.append(Tracker.round3(r.y))
@@ -80,6 +97,16 @@ final class Tracker: NSObject, ObservableObject, ARSessionDelegate {
             }
             msg["p"] = p
             msg["u"] = u
+            // the skeleton on the phone's own screen (every other frame is plenty)
+            if frameN % 2 == 0, let v = view {
+                var pts: [CGPoint] = []
+                for (a, b) in bonePairs where a < worlds.count && b < worlds.count {
+                    if let pa = v.project(worlds[a]), let pb = v.project(worlds[b]) { pts.append(pa); pts.append(pb) }
+                }
+                lines = pts
+            }
+        } else if !lines.isEmpty && frameN % 2 == 0 {
+            lines = []
         }
         if let data = try? JSONSerialization.data(withJSONObject: msg) {
             send(data, binary: false)

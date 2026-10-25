@@ -28,11 +28,17 @@ Built 25 Oct 2026 in the Arm Follow chat. First Xcode build (25 Oct) needed two 
 ## Use it
 
 1. **Phone and laptop on the same Wi-Fi** (or the laptop on the phone's hotspot). College Wi-Fi often blocks devices from talking to each other; a hotspot always works.
-2. **Place the phone** on its side (landscape), back camera facing you, about chest height, 2–4 m away, your whole body in the picture. The app shows its address in big letters, like `192.168.1.23:8443`.
+2. **Place the phone** on its side (landscape; the app draws your skeleton in yellow on its own screen too), back camera facing you, about chest height, 2–4 m away, your whole body in the picture. The app shows its address in big letters, like `192.168.1.23:8443`.
 3. **Once per laptop (the certificate):** in Chrome, open `https://` followed by that address (e.g. `https://192.168.1.23:8443`), choose **Advanced → Proceed**. The page then shows an error; that's fine, close it. If Chrome asks to allow access to devices on your local network, allow it.
 4. **In Arm Follow:** Tracking → Tracker → **iPhone (Body Stream app)**, type the address, **Connect**. The camera view in the corner shows the phone's picture with your skeleton.
 
 Each laptop chooses its own tracker, so P1 can use an iPhone while P2 uses a webcam, or both use phones.
+
+## Good to know
+
+- Once the app is on the phone, unplug it: open Body Stream from the home screen like any app. Plug in again only to update it, or after 7 days (free Apple ID).
+- Xcode's bottom panel fills with camera messages ("orientation", "Fig" errors) while the app runs from it. They're harmless.
+- For a landscape-only app: target → General → iPhone Orientation, untick Portrait.
 
 ## Limits
 
