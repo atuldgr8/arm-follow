@@ -260,6 +260,8 @@ async function startMediaPipe(deviceId, fromPhone) {
       MP.fromPhone = false;
       MP.stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
       MP.video = document.createElement('video'); MP.video.playsInline = true; MP.video.muted = true; MP.video.srcObject = MP.stream; await MP.video.play();
+      // the field of view, from the camera's name (floordraw.js): C920 ≈ 70°, C270 ≈ 49°, others 70°
+      if (typeof setWebcamFov === 'function') { let tr = MP.stream.getVideoTracks()[0]; setWebcamFov(tr && tr.label); }
     }
     let fs = await FilesetResolver.forVisionTasks(MP_URL);
     let model = SET.mpModel === 'full' ? 'pose_landmarker_full/float16/1/pose_landmarker_full.task' : 'pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -406,7 +408,7 @@ function filterPts(arr, store, t, scale, withZ, fz) {
 // measuring the floor, and then START. Hands have to come down again before it counts again.
 const GEST = { since: 0, armed: true, k: 0, slot: 0 };
 function gestureTick(slot, lm, now) {
-  if (!SET.gestures || typeof RUN === 'undefined' || !calSlots().includes(slot)) return;
+  if (!SET.gestures || typeof RUN === 'undefined' || !calSlots().includes(slot) || (typeof FD !== 'undefined' && FD.on)) return;
   let active = CAL.active || RUN.phase === 'setup';
   let ok = q => q && (q.visibility === undefined || q.visibility > 0.5);
   let up = active && [15, 16].every(i => ok(lm[i]) && ok(lm[0]) && lm[i].y < lm[0].y - 0.03);

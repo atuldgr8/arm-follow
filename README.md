@@ -7,6 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.21 (26 Oct): draw the floor by walking it (T-pose at each corner), field of view from the camera's name
+
+- **Draw the floor from inside the picture:** open **Draw it** (or Floor → **Draw the floor on the camera**). Walk to a corner of your play area and hold a **T-pose** (arms straight out) for a second: a corner is added between your feet, with a chime and a filling bar. Then the next corner, four in all. The big words at the top are readable from across the room. Drag any corner to fix it, click to add one by hand, **Undo corner**, **Use this floor** (Enter).
+- **Its size, from walking it** (replaces v1.20's camera-height guess): while the view is open, it notes how far away you look against how low your feet are in the picture. Walking to corners near and far gives the fit between the two, the same one your feet use for where you stand, and that puts every corner in metres. If you didn't walk toward and away from the camera enough, each corner is placed where you were tracked when you marked it (rougher; it says so). A typed size still wins. Redrawing keeps what walking it taught.
+- **Field of view, set from the camera's name:** Logitech C920 70°, C270 49°, anything else (your laptop's camera) 70°. The iPhone's camera inputs set their own from the lens. The slider is gone; the Tracking section shows which value is in use and why.
+
 ## v1.20 (26 Oct): draw the floor on the camera
 
 A second way to measure the floor, next to walking to its edges. **Draw it** (getting-ready card, step 1) or **Draw the floor on the camera** (Floor section) opens a big camera picture: click the four corners of your play area on the floor (tape makes it easy), drag any corner to fix it, **Use this floor** (Enter; Esc cancels).

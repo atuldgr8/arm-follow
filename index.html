@@ -58,7 +58,9 @@
     #bigmsg .small { font-size: clamp(13px, 1.4vw, 18px); color: var(--ink2); margin-top: 8px; line-height: 1.5; }
     /* drawing the floor on the camera picture (floordraw.js) */
     #fdraw { position: absolute; inset: 0; z-index: 20; background: var(--paper); display: none; flex-direction: column; padding: 14px 18px; box-sizing: border-box; gap: 10px; }
-    #fd-top .fh { font-size: 14px; font-weight: 500; } #fd-top .fsub { color: var(--ink2); font-size: 12px; margin-top: 3px; line-height: 1.5; }
+    #fd-top { text-align: center; } #fd-top .fh { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink2); }
+    #fd-top .fcue { font-size: clamp(22px, 3vw, 40px); font-weight: 500; letter-spacing: 1px; margin-top: 4px; } #fd-top .fsub { color: var(--ink2); font-size: clamp(13px, 1.4vw, 18px); margin-top: 3px; }
+    #fd-top .fdbar { width: 260px; height: 6px; border-radius: 3px; background: var(--field); margin: 8px auto 0; overflow: hidden; } #fd-bar { height: 100%; width: 0; background: #F5B800; }
     #fd-canvas { flex: 1; width: 100%; min-height: 0; border-radius: 14px; background: #1a1a1a; cursor: crosshair; touch-action: none; }
     #fd-bot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
     #fd-bot .say { flex: 1 1 100%; color: var(--ink); line-height: 1.5; } #fd-bot .say b { font-weight: 500; }
@@ -190,12 +192,12 @@
       </div>
       <div id="calib"><div class="big" id="calib-big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div><div class="gbar"><div id="calib-g"></div></div></div>
       <div id="fdraw">
-        <div id="fd-top"><div class="fh">Draw your floor</div><div class="fsub">Click the four corners of the space you’ll play in, on the floor in the picture (tape on the floor makes it easy). Drag a corner to fix it. Stand in the picture with your feet in view while you do: that’s how it judges the real size.</div></div>
+        <div id="fd-top"><div class="fh">Draw your floor</div><div id="fd-cue" class="fcue"></div><div id="fd-cuesub" class="fsub"></div><div class="fdbar"><div id="fd-bar"></div></div></div>
         <canvas id="fd-canvas"></canvas>
         <div id="fd-bot">
           <div class="say"><span id="fd-say"></span> <span id="fd-est"></span></div>
           <span>Measured it? (optional)</span><input type="text" inputmode="decimal" id="fd-w" placeholder="across"><span>×</span><input type="text" inputmode="decimal" id="fd-d" placeholder="front–back"><span>m</span>
-          <span style="flex:1"></span><button id="fd-clear">Clear corners</button><button id="fd-cancel">Cancel</button><button class="pri" id="fd-use">Use this floor</button>
+          <span style="flex:1"></span><button id="fd-undo">Undo corner</button><button id="fd-clear">Clear corners</button><button id="fd-cancel">Cancel</button><button class="pri" id="fd-use">Use this floor</button>
         </div>
       </div>
       <canvas id="pip"></canvas>
@@ -245,7 +247,7 @@
           <div class="f"><label>Hand tracking<span class="tip" title="Body model: 4 points per hand, steady at a distance, rough palm direction. Hand model: 21 points, sees which way the palm faces and how open the hand is, but may drop out at 2–3 m.">ⓘ</span></label><select id="hands"><option value="pose">Body model only (4 points per hand)</option><option value="hand">Add the hand model (21 points)</option></select></div>
           <div class="f"><label>Reaching toward the camera<span class="tip" title="From the picture: an arm pointing at the camera looks short, and knowing its real length tells how far it points at you (new, better for reaching forward). Body model: MediaPipe's own depth guess (old).">ⓘ</span></label><select id="reach"><option value="picture">From how short the arm looks (new)</option><option value="model">The body model's depth guess (old)</option></select></div>
           <div class="f"><label>Body model</label><select id="mpmodel"><option value="lite">Lite (fast)</option><option value="full">Full (steadier, slower)</option></select></div>
-          <div class="f"><label>Webcam field of view<span class="tip" title="Used to guess how far away you are">ⓘ</span><span class="val" id="val-fov"></span></label><input type="range" id="fov" min="40" max="110" step="1"></div>
+          <div class="f"><div class="note" id="fov-note"></div><input type="range" id="fov" min="40" max="110" step="1" style="display:none"><span id="val-fov" style="display:none"></span></div>
           </div>
           <div class="cond" id="g-split" data-why="Finding two people · 1 space only">
           <div class="f"><label>Finding two people</label><select id="mpsplit"><option value="1">Split the picture: one person per half (steadier)</option><option value="0">Both in one picture</option></select></div>
@@ -410,7 +412,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.20 · 26 Oct 21:00'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.21 · 26 Oct 21:30'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'floordraw.js', 'scene.js', 'bubbles.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

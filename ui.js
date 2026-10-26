@@ -372,6 +372,7 @@ function updatePanel() {
   for (let [id, key, f] of [['bubn', 'bubbleN', v => Math.round(v) + ' bubbles'], ['bubt', 'roundS', v => v + ' s'], ['jthr', 'jumpThr', v => Math.round(v * 100) + ' cm']]) { $(id).value = SET[key]; $('val-' + id).textContent = f(SET[key]); }
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('floorfrom').value = SET.floorFrom;
+  $('fov-note').textContent = 'Field of view ' + Math.round(SET.fov) + '° · ' + (SET.tracker !== 'webcam' && SET.tracker !== 'webdepth' ? 'from the iPhone’s lens' : 'from the camera’s name' + (SET.fovFrom ? ' (' + SET.fovFrom.replace(/\s*\(.*\)\s*$/, '') + ')' : ''));
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (CAL.rect ? (CAL.rect.drawn ? ' (drawn' + (CAL.rect.real ? ', measured' : ', guessed') + ')' : ' (walked)') : '') + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
   $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
