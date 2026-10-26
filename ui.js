@@ -88,6 +88,7 @@ const HAND_BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 
 function pipStep() {
   phoneButton();
   let c = $('pip'); c.style.display = SET.pip ? 'block' : 'none'; if (!SET.pip) return;
+  c.style.pointerEvents = patchHere() ? 'auto' : 'none';   // only when there's a patch to drag
   // the picture: the webcam's, or the small one the iPhone sends
   let pic = SET.source !== 'mediapipe' ? null : phoneOn() ? (PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null)
     : MP.fromPhone ? (PHONE.bmp ? { el: MP.video, w: MP.video.width, h: MP.video.height } : null)
@@ -136,7 +137,7 @@ function pipStep() {
       let use = usable(my), smaller = use && use !== mine && (rectW(use) < rectW(mine) - 0.02 || rectD(use) < rectD(mine) - 0.02);
       let whole = mine.quad ? mine.quad.map(q => ({ x: q[0], y: q[1] })) : onPic(mine), patch = smaller ? onPic(use) : null;
       if (whole) outline(whole, smaller ? 'rgba(255,176,32,0.45)' : 'rgba(255,176,32,0.95)', [2, 5], 2, smaller ? 'YOUR FLOOR' : 'FLOOR');
-      if (patch) outline(patch, 'rgba(255,176,32,1)', [], 3, 'PLAY HERE · the smaller room', 'rgba(255,176,32,0.16)');
+      if (patch) outline(patch, 'rgba(255,176,32,1)', [], 3, 'PLAY HERE · drag to move', 'rgba(255,176,32,0.16)');
       if ((!whole || (smaller && !patch)) && !FD.on) {
         x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 11px monospace';
         x.fillText('The floor can’t be placed on this picture: measure it walking toward/away from the camera, or draw it', 8, h - 26); x.restore();
@@ -193,6 +194,40 @@ function pipStep() {
   }
   if (cam) bubblePipFrame(x, w, h);   // Bubble Pop: green / red frame for the feet, and the clap window
   x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands' + (MP.fromPhone && PHONE.cam && PHONE.cam.held ? ' · phone ' + PHONE.cam.held : '') + ' · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
+}
+
+// DRAG THE SMALLER ROOM'S PATCH in the camera view (rooms of different sizes, both using the smaller one):
+// grab the bold PLAY HERE patch and move it anywhere on your floor. It's kept with your floor (and sent
+// to the other laptop with it), so a deep room can put it where the camera sees you best.
+const PDRAG = { on: false, from: null, pc0: null };
+function patchHere() {
+  let my = isGuest() ? 2 : 1, r = CAL.rect, u = usable(my);
+  return r && u && u !== r && r.fa !== undefined && !CAL.active ? { r, u } : null;
+}
+function pipFloorAt(ev) {
+  let c = $('pip'), b = c.getBoundingClientRect(), X = (ev.clientX - b.left) / b.width, Y = (ev.clientY - b.top) / b.height;
+  return pictureToFloor(CAL.rect, SET.mirror ? 1 - X : X, Y);
+}
+function setupPatchDrag() {
+  let c = $('pip');
+  c.addEventListener('pointerdown', ev => {
+    let P = patchHere(), f = P && pipFloorAt(ev); if (!f) return;
+    let m = 0.2; if (f.x < P.u.x0 - m || f.x > P.u.x1 + m || f.z < P.u.z0 - m || f.z > P.u.z1 + m) return;
+    PDRAG.on = true; PDRAG.from = f; PDRAG.pc0 = { x: (P.u.x0 + P.u.x1) / 2, z: (P.u.z0 + P.u.z1) / 2 }; c.setPointerCapture(ev.pointerId); ev.preventDefault();
+  });
+  c.addEventListener('pointermove', ev => {
+    let P = patchHere(); c.style.cursor = P ? (PDRAG.on ? 'grabbing' : 'grab') : '';
+    if (!PDRAG.on || !P) return; let f = pipFloorAt(ev); if (!f) return;
+    P.r.pc = { x: PDRAG.pc0.x + f.x - PDRAG.from.x, z: PDRAG.pc0.z + f.z - PDRAG.from.z };
+    let u = usable(isGuest() ? 2 : 1); P.r.pc = { x: (u.x0 + u.x1) / 2, z: (u.z0 + u.z1) / 2 };   // kept inside the floor
+  });
+  let up = () => {
+    if (!PDRAG.on) return; PDRAG.on = false;
+    try { localStorage.setItem(CAL.rect.drawn ? 'armfollow.floorDrawn' : 'armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
+    logEvent('patch moved', { pc: CAL.rect.pc }); toast('The smaller room moved');
+    if (!isGuest() && RUN.phase === 'play') restartWorld();
+  };
+  c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
 }
 
 // ---------------- log [O] ----------------
@@ -329,6 +364,7 @@ function setupPanel() {
   $('btn-cal').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
   $('f-cal').onclick = calibrate; $('f-skip').onclick = skipFloor; $('f-again').onclick = calibrate;
   // drawing the floor on the camera (floordraw.js)
+  setupPatchDrag();
   $('f-draw').onclick = fdOpen; $('btn-draw').onclick = fdOpen; $('floorfrom').onchange = e => useFloorFrom(e.target.value); fdSetup();
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
   $('f-start').onclick = startRun; $('btn-setup').onclick = backToSetup;

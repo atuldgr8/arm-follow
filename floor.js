@@ -81,6 +81,12 @@ function fitFloor(S) {
   let b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
   return b > 0 ? { a, b } : null;
 }
+// a camera picture point (0..1, as the camera sees it) → this laptop's camera metres on the floor (inverse of the next)
+function pictureToFloor(r, u, v) {
+  if (!r || r.fa === undefined || v - r.fa < 0.005) return null;
+  let z = r.fb / (v - r.fa), tanH = Math.tan(SET.fov * Math.PI / 360);
+  return { x: (u - 0.5) * 2 * z * tanH * (SET.mirror ? -1 : 1), z };
+}
 // a floor point (this laptop's camera metres) → where it is in the camera picture (0..1)
 function floorToPicture(r, x, z) {
   if (!r || r.fa === undefined || z < 0.3) return null;
@@ -110,9 +116,12 @@ function usable(slot) {
   if (SET.spaces === 2 && SET.roomFit === 'smaller') {
     let o = rectOf(3 - slot);
     if (o) {
-      // the patch sits where this camera sees the whole body best: toward the back of the floor
-      // (further from the camera = more of you in the picture), centred left to right
-      let w = Math.min(rectW(r), rectW(o)), d = Math.min(rectD(r), rectD(o)), cx = (r.x0 + r.x1) / 2, cz = r.z1 - d / 2;
+      // the patch: where you dragged it in the camera view (r.pc, kept with your floor), or by default
+      // centred left to right, halfway between the middle of the floor and its back (further from the
+      // camera = more of you in the picture, without ending up against the back wall of a deep room)
+      let w = Math.min(rectW(r), rectW(o)), d = Math.min(rectD(r), rectD(o));
+      let cx = r.pc ? r.pc.x : (r.x0 + r.x1) / 2, cz = r.pc ? r.pc.z : Math.min(r.z1 - d / 2, (r.z0 + r.z1) / 2 + (rectD(r) - d) / 4);
+      cx = clamp(cx, r.x0 + w / 2, r.x1 - w / 2); cz = clamp(cz, r.z0 + d / 2, r.z1 - d / 2);
       return { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 };
     }
   }

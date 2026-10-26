@@ -7,7 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.21.1 (26 Oct): the smaller room shows on the bigger room's floor
+## v1.21.2 (26 Oct): place the smaller room yourself
+
+- **Drag the patch:** in the bigger room's camera view, grab the bold **PLAY HERE** patch and drag it anywhere on your floor. It's saved with your floor and sent to the other laptop with it; restarting is automatic if you're mid-game. P2 can move theirs too.
+- **The default spot** is now centred left to right and halfway between the middle of the floor and its back (it used to sit against the back edge, too far away in a deep room).
+: the smaller room shows on the bigger room's floor
 
 - **Both use the smaller room:** the camera view in the bigger room now shows your whole floor faintly (YOUR FLOOR) and the patch you actually play in, bold and filled: **PLAY HERE · the smaller room**. (Before, only the patch was outlined, so it wasn't clear your space had shrunk.) A drawn floor shows exactly where you marked it.
 - If a floor can't be placed on the picture (measured without walking toward and away from the camera), the camera view now says so instead of showing nothing.
