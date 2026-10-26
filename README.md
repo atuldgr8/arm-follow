@@ -7,7 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.27 (27 Oct): the start flow: floor → ring → countdown → play
+## v1.27.2 (27 Oct): drawing the floor with the iPhone's body tracking (LiDAR)
+
+- **Draw it** now works with **iPhone · body tracking (Apple)**: it draws on the small picture the phone sends. T-pose at each corner and the corners are placed where the LiDAR measured you standing (real metres, the most accurate floor of any input); clicked or dragged corners use the fit from walking it.
+- Walking to calibrate with that input now gets the feet for the fit too, and the camera view outlines the floor in that mode as well (it didn't before).
+: the start flow: floor → ring → countdown → play
 
 1. **Floor, on both laptops:** **Calibrate** (walk it), **Draw it** (on the camera), or **Use saved floor** if this laptop has one (it shows its size). Nothing goes on without a floor; there's no skipping any more.
 2. **The ring:** once both laptops have their floor and both people are found, it moves to the green ring by itself (START is still there as a nudge). The body waits lifeless and lights up as each of you arrives.

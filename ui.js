@@ -141,7 +141,7 @@ function pipStep() {
         if (H.length > 2) outline(H, 'rgba(255,176,32,1)', [6, 5], 3, 'WHERE YOU’VE WALKED · now go toward and away from the camera', 'rgba(255,176,32,0.12)');
       }
       if (CAL.pic) { x.fillStyle = 'rgba(255,176,32,0.5)'; for (let i = Math.max(0, CAL.pic.length - 300); i < CAL.pic.length; i += 3) { let q = CAL.pic[i]; x.fillRect(q[0] * w - 1, q[1] * h - 1, 2, 2); } }
-    } else if (mine && !phoneOn()) {
+    } else if (mine) {   // (iPhone body tracking too: its picture shows the floor as well)
       // rooms of different sizes, both using the smaller one: your whole floor faint, the patch you play in bold
       let use = usable(my), smaller = use && use !== mine && (rectW(use) < rectW(mine) - 0.02 || rectD(use) < rectD(mine) - 0.02);
       let whole = mine.quad ? mine.quad.map(q => ({ x: q[0], y: q[1] })) : onPic(mine), patch = smaller ? onPic(use) : null;

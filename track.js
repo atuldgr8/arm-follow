@@ -171,6 +171,7 @@ function setPerson(id, key, raw, now, smoothIt) {
     H.push([now, raw.up]); while (H.length > 1 && now - H[0][0] > 400) H.shift();
     p.upMin = H.reduce((m, e) => Math.min(m, e[1]), raw.up);
   }
+  if (raw.ankY !== undefined) p.ankY = raw.ankY;
   if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; p.distT = raw.distT; p.lmS = raw.lmS; }
   let t = now / 1000, fz = feel(), j = {}, glide = smoothIt === 'glide';
   if (smoothIt === true) {

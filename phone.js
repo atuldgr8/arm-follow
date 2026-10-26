@@ -252,7 +252,8 @@ function phoneTick(now) {
   let H = m.H || 1440, W = m.W || 1920;
   let img = ok ? { x: (lm[23].x + lm[24].x) / 2, y: (lm[23].y + lm[24].y) / 2 } : { x: 0.5, y: 0.5 };
   let size = ok ? Math.hypot(((lm[11].x + lm[12].x) - (lm[23].x + lm[24].x)) / 2 * W, ((lm[11].y + lm[12].y) - (lm[23].y + lm[24].y)) / 2 * H) / H : 0.3;
-  setPerson(slot, null, { j, chir: SET.mirror ? 1 : -1, lm: ok ? lm : null, lmS: ok ? lm : null, hands: {}, img, size, dist: j.pelvis.z, distT: j.pelvis.z, up: Math.max(0, riseP) }, now, 'glide');
+  let ankY = lm[27] && lm[28] ? Math.max(lm[27].y, lm[28].y) : undefined;   // for the floor fit (walking to calibrate, drawing it)
+  setPerson(slot, null, { j, chir: SET.mirror ? 1 : -1, lm: ok ? lm : null, lmS: ok ? lm : null, hands: {}, img, size, dist: j.pelvis.z, distT: j.pelvis.z, up: Math.max(0, riseP), ankY }, now, 'glide');
   if (ok) gestureTick(slot, lm, now);
   PHONE.seen = now;
   TRK.status = 'iPhone: tracking · ' + j.pelvis.z.toFixed(2) + ' m away';

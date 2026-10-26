@@ -39,7 +39,8 @@ const r4 = x => Math.round(x * 10000) / 10000;
 function fdPicture() {
   if (SET.source !== 'mediapipe') return null;
   if (MP.fromPhone) return PHONE.bmp ? { el: MP.video, w: MP.video.width, h: MP.video.height } : null;
-  if (SET.tracker === 'iphone') return null;
+  // iPhone body tracking (LiDAR): the small picture the phone sends alongside the skeleton
+  if (SET.tracker === 'iphone') return PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null;
   return MP.video && MP.video.readyState >= 2 ? { el: MP.video, w: MP.video.videoWidth, h: MP.video.videoHeight } : null;
 }
 // the person drawing: the first one in this laptop's camera
@@ -74,6 +75,8 @@ function fdToFloor(q, fit) {
 function fdEstimate() {
   if (FD.pts.length < 4) return null;
   let fit = fdFit(), F = fit ? FD.pts.map(q => fdToFloor(q, fit)) : null, how = 'walked';
+  // iPhone body tracking: where you stood at each T-posed corner is real LiDAR metres, the best there is
+  if (SET.tracker === 'iphone' && FD.at.length === 4 && FD.at.every(a => a)) { F = FD.at.map(a => ({ x: a.x, z: a.z })); how = 'measured'; }
   if (!F || F.some(q => !q || q.z < 0.3 || q.z > 12)) {
     // not enough walking toward/away to fit: where you were tracked when you marked each corner
     F = FD.at.map(a => a ? { x: a.x, z: a.z } : null); how = 'tracked';
@@ -88,7 +91,7 @@ function fdEstimate() {
 
 // ---------------- open, close, use ----------------
 function fdOpen() {
-  if (!fdPicture()) { toast(SET.tracker === 'iphone' ? 'Drawing the floor needs a camera picture: pick a webcam or an iPhone camera input' : 'No camera picture yet'); return; }
+  if (!fdPicture()) { toast(SET.tracker === 'iphone' ? 'No picture from the iPhone yet: is Body Stream connected?' : 'No camera picture yet'); return; }
   if (CAL.active) calibrate();
   FD.on = true; FD.drag = -1; FD.samples = []; FD.tp = { since: 0, armed: true, k: 0 };
   FD.pts = CAL.drawn && CAL.drawn.quad && CAL.drawn.fov === SET.fov ? CAL.drawn.quad.map(q => ({ u: q[0], v: q[1] })) : [];
@@ -184,7 +187,7 @@ function fdTick() {
   }
   let fit = fdFit();
   $('fd-say').textContent = FD.pts.length < 4 ? 'Or click corners by hand. Drag any corner to fix it.' : e && e.bad ? e.bad : 'Drag a corner to fix it.';
-  $('fd-est').innerHTML = (e && !e.bad ? 'The area is about <b>' + e.w.toFixed(1) + ' × ' + e.d.toFixed(1) + ' m</b> (across × front to back), ' + (e.how === 'walked' ? 'from walking it ✓' : 'from where you were tracked at each corner (rougher)') + '. ' : '')
+  $('fd-est').innerHTML = (e && !e.bad ? 'The area is about <b>' + e.w.toFixed(1) + ' × ' + e.d.toFixed(1) + ' m</b> (across × front to back), ' + (e.how === 'measured' ? 'measured by the iPhone’s LiDAR where you stood ✓' : e.how === 'walked' ? 'from walking it ✓' : 'from where you were tracked at each corner (rougher)') + '. ' : '')
     + (fit ? '' : 'Walk toward and away from the camera a bit while you mark corners: that’s what it measures the size from.');
   $('fd-use').disabled = !(e && !e.bad);
 }
