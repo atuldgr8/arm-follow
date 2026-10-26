@@ -317,7 +317,7 @@ function phoneButton() {
 function setupPanel() {
   $('btn-cheat').onclick = () => { toggleCheat(); updatePanel(); };
   $('f-fold').onclick = () => { let f = $('flow'); f.classList.toggle('folded'); $('f-fold').textContent = f.classList.contains('folded') ? '+' : '–'; };
-  $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel(); };
+  $('src').onchange = e => { unlockPeople(); setSource(e.target.value, $('cam').value); RUN.phase = SET.source === 'demo' ? 'centre' : 'setup'; updatePanel(); };
   // ONE INPUT LIST: every webcam by name, the three iPhone modes, demo people. It sets the source, the tracker
   // and the camera together (those three stay underneath, hidden, as the rest of the code knows them).
   let fillInput = l => {
@@ -338,7 +338,7 @@ function setupPanel() {
       if (v.startsWith('webdepth:')) $('cam').value = v.slice(9);
       setSource('mediapipe', $('cam').value);
     }
-    RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; updatePanel();
+    RUN.phase = SET.source === 'demo' ? 'centre' : 'setup'; updatePanel();
   };
   $('cam').onchange = () => { if (SET.source === 'mediapipe') setSource('mediapipe', $('cam').value); };
   $('tracker').value = SET.tracker; $('tracker').onchange = e => { SET.tracker = e.target.value; try { localStorage.setItem('armfollow.tracker', SET.tracker); } catch (x) {} unlockPeople(); restartTracking(); updatePanel(); };
@@ -479,10 +479,10 @@ function updatePanel() {
 // centre: START locks onto the people being followed; both walk onto the ring (the
 //         middle of the floor they use); once both are there it begins by itself
 // play:   the experience. Setup (quick bar) goes back to the start.
-const RUN = { phase: SET.source === 'demo' ? 'play' : 'setup', centre: null, centreT: 0 };
+const RUN = { phase: SET.source === 'demo' ? 'centre' : 'setup', centre: null, centreT: 0 };
 const isHuman = p => p && (p.key === null || (p.key === 'net' && p.human));
 // always walk onto the ring first (real people); the demo and the computer partner start straight away
-function needsCentre() { return SET.source === 'mediapipe' && SET.comp === 'off' && !SET.solo; }
+function needsCentre() { return SET.comp === 'off' && !SET.solo; }   // everyone walks onto the ring, demo people too
 function startRun() {
   if (isGuest()) return;
   if (CAL.active) calibrate();
@@ -491,10 +491,11 @@ function startRun() {
   else beginPlay();
   updatePanel();
 }
-function beginPlay(counted) { RUN.phase = 'play'; RUN.centre = null; restartWorld(); if (counted && typeof BUB !== 'undefined') BUB.skipCount = true; logEvent('flow', { to: 'play' }); toast('Go!'); updatePanel(); }
+function beginPlay(counted) {
+  if (typeof DEMO !== 'undefined') DEMO.ring = null; RUN.phase = 'play'; RUN.centre = null; restartWorld(); if (counted && typeof BUB !== 'undefined') BUB.skipCount = true; logEvent('flow', { to: 'play' }); toast('Go!'); updatePanel(); }
 function backToSetup() {
   if (isGuest()) { toast('P1’s laptop decides this'); return; }
-  unlockPeople(); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; RUN.centre = null; logEvent('flow', { to: 'setup' }); updatePanel();
+  unlockPeople(); RUN.phase = SET.source === 'demo' ? 'centre' : 'setup'; RUN.centre = null; logEvent('flow', { to: 'setup' }); updatePanel();
 }
 // host: during the walk to the centre, who's there yet
 // how close to the middle counts as "on the ring" (webcam positions are a guess: 15 cm was too strict and
@@ -505,7 +506,7 @@ function centreStep(dt) {
   let st = {};
   for (let k of [1, 2]) {
     let p = k === 2 ? live2() : live(1), d = centreDist(k);
-    st['d' + k] = !p ? null : (d === null || !isHuman(p)) ? 0 : r3(d);
+    st['d' + k] = !p ? null : (d === null || p.key === 'computer') ? 0 : r3(d);   // the computer partner counts as there
   }
   RUN.centre = st;
   let there = k => st['d' + k] !== null && st['d' + k] < RING_OK;
@@ -543,7 +544,7 @@ function flowStep() {
   if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>raise both hands above your head for a second</b>, or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
     + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
   else if (done1) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
-  else if (CAL.rect) t1 = 'A floor is saved on this laptop. Use it, or measure again if anything moved (Calibrate walks it; Draw it on the camera).';
+  else if (CAL.rect) t1 = 'A floor is saved on this laptop: it’s outlined in amber on the floor in the camera view. If it still matches your space, use it; if anything moved, measure again (Calibrate walks it; Draw it on the camera).';
   else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then raise both hands above your head (or press Done). Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
   $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';

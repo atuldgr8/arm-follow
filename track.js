@@ -730,10 +730,25 @@ function elbowFor(sh, wr, sg) {
   return vadd(sh, vadd(vmul(t, a * cosA), vmul(pole, a * sinA)));
 }
 
+// DEMO PEOPLE WALK ONTO THE RING: each starts off to one side and walks to their own spot (P2 a moment later)
+function demoToRing(now, dt, which) {
+  if (!DEMO.ring) DEMO.ring = { 1: { x: 0.9, z: 3.5, walk: 0, wait: 0.3 }, 2: { x: -0.8, z: 3.6, walk: 0, wait: 1.3 } };
+  DEMO.reset = true;   // when play begins, the usual demo starts fresh
+  let out = {};
+  for (let k of [1, 2]) {
+    let D = DEMO.ring[k], c = centreOf(k), moving = 0;
+    D.wait -= dt;
+    if (c && D.wait <= 0) { let dx = c.x - D.x, dz = c.z - D.z, d = Math.hypot(dx, dz), st = 0.6 * dt; if (d > 0.02) { D.x += dx / d * Math.min(st, d); D.z += dz / d * Math.min(st, d); moving = 1; } }
+    D.walk += dt * 7 * moving;
+    out[k] = makePerson(D.x, D.z, D.walk, moving, null);
+  }
+  return which ? out[which] : out;
+}
 // The demo: P1 walks to the cube; P2 follows, but sometimes gets distracted and is left
 // behind (the arm falls), then hurries to catch up (it comes back). Together they lift.
 const DEMO = { reset: true, t: 0, p1: null, p2: null };
 function demoPeople(now, dt, which) {
+  if (typeof RUN !== 'undefined' && (RUN.phase === 'centre' || RUN.phase === 'countdown')) return demoToRing(now, dt, which);
   if (typeof isBubbles === 'function' && isBubbles()) return demoBubbles(now, dt, which);   // bubbles.js
   if (DEMO.reset || !DEMO.p1 || DEMO.bub) {
     DEMO.reset = false; DEMO.bub = false;
@@ -841,7 +856,7 @@ function compTick(now, dt) {
 let demoLast = 0;
 function setSource(src, deviceId) {
   SET.source = src;
-  people[1] = null; people[2] = null; DEMO.reset = true; COMP.hist = []; COMP.x = null;
+  people[1] = null; people[2] = null; DEMO.reset = true; DEMO.ring = null; COMP.hist = []; COMP.x = null;
   if (typeof FOLLOW !== 'undefined') { FOLLOW.state = 'vacant'; FOLLOW.ref1 = null; }   // tracking restarts: the arm re-attaches fresh (it used to drop)
   if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone('body'); }
   else if (src === 'mediapipe' && (SET.tracker === 'phonecam' || SET.tracker === 'phonedepth')) { stopPhone(); startMediaPipe(null, true); }
