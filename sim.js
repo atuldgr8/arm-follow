@@ -59,19 +59,25 @@ function composeAvatar(dt) {
   let yawC = clamp(p.yaw, -SET.turnMax, SET.turnMax);
   AV.unturn = (p.yaw - yawC) * Math.PI / 180;
   let j = p.j, pel = j.pelvis, rel = n => unturn(vsub(j[n], pel)), legs = {};
+  // Bubble Pop, legs split: P2's leg takes its shape from P2's own leg
+  let q2 = isBubbles() && SET.legSplit ? live2() : null;
   for (let s of ['L', 'R']) {
-    let hip = rel('hip' + s), kn = vadd(hip, vmul(vnorm(unturn(vsub(j['kn' + s], j['hip' + s]))), 0.43));
-    legs[s] = { hip, kn, an: vadd(kn, vmul(vnorm(unturn(vsub(j['an' + s], j['kn' + s]))), 0.42)) };
+    let mine = !(q2 && q2 !== p && legOwner(s) === 2), lj = mine ? j : q2.j, turnIt = mine ? unturn : (v => v);
+    let hip = rel('hip' + s), kn = vadd(hip, vmul(vnorm(turnIt(vsub(lj['kn' + s], lj['hip' + s]))), 0.43));
+    legs[s] = { hip, kn, an: vadd(kn, vmul(vnorm(turnIt(vsub(lj['an' + s], lj['kn' + s]))), 0.42)) };
   }
   let pyT = 0.075 - Math.min(legs.L.an.y, legs.R.an.y);
   AV.py = AV.ok ? AV.py + (pyT - AV.py) * Math.min(1, dt * 8) : pyT;
-  let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(pel.x, pel.z);   // your real floor position, in the room (floor.js); arms only: stays put
+  // Bubble Pop, legs split: the body walks only when both step the same way (the hurdle walk, bubbles.js)
+  let walk = isBubbles() && SET.legSplit ? hurdleStep(dt, p) : pel;
+  let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(walk.x, walk.z);   // your real floor position, in the room (floor.js); arms only: stays put
   vp = reachHold(vp);
-  if (SET.solid && !SET.armsOnly) vp = solidPush(vp);
+  if (SET.solid && !SET.armsOnly && !isBubbles()) vp = solidPush(vp);
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
   AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), shL: W(rel('shL')), shR: W(rel('shR')),
     hipL: W(legs.L.hip), knL: W(legs.L.kn), anL: W(legs.L.an), hipR: W(legs.R.hip), knR: W(legs.R.kn), anR: W(legs.R.an) };
+  if (isBubbles()) jumpLift(AV.j);   // Bubble Pop: the jump lifts the body (a lopsided hop, only one side)
   let F = torsoFrame(j);
   AV.frame = { X: unturn(F.X), Y: unturn(F.Y), Z: unturn(F.Z) };
   AV.yaw = yawC;
@@ -103,7 +109,7 @@ function solidPush(vp) {
 // the usual walk gain) pushes the body along. Webcam/iPhone people only (the demo walks exactly).
 const RLOCK = { on: false, at: null };
 function reachHold(vp) {
-  if (!SET.reachLock || SET.armsOnly || !AV.ok || SET.source !== 'mediapipe') { RLOCK.on = false; return vp; }
+  if (!SET.reachLock || SET.armsOnly || isBubbles() || !AV.ok || SET.source !== 'mediapipe') { RLOCK.on = false; return vp; }
   let goal = CUBE.held ? (TARGET.on ? TARGET.p : null) : CUBE.c;
   let d = goal ? Math.hypot(goal.x - AV.root.x, goal.z - AV.root.z) : 99;
   // switches on where the first-person view does (examineDist), off 0.7 m further out (sticky, like the view)
@@ -164,7 +170,7 @@ function followStep() {
   FOLLOW.dvec = { x: dx, z: dz };
   FOLLOW.drift = Math.hypot(dx, dz);
   FOLLOW.turn = Math.abs(wrap180((a.yaw - FOLLOW.yaw1) - (b.yaw - FOLLOW.yaw2)));
-  if (SET.armsOnly) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only: never left behind (a fallen arm comes back)
+  if (SET.armsOnly || isBubbles()) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
   if (!mine.length) { FOLLOW.state = 'together'; return; }
   let over = FOLLOW.drift > SET.tol || FOLLOW.turn > SET.turnTol;
   let under = FOLLOW.drift < 0.6 * SET.tol && FOLLOW.turn < 0.6 * SET.turnTol;
@@ -682,6 +688,7 @@ function restartWorld() {
   for (let s of ['L', 'R']) { ARMS[s] = newArm(s); }
   AV.ok = false;
   spawnCube(true);
+  bubblesReset();
   logEvent('restart', {});
 }
 // when who-owns-what changes, every arm starts attached again
@@ -696,7 +703,9 @@ function simStep(dt, now) {
   if (AV.ok) {
     followStep();
     for (let s of ['L', 'R']) { armStep(ARMS[s], dt, now); }
-    if (!SET.armsOnly) { gripStep(dt); palmsOnSurface(); taskStep(dt); }
+    if (SET.armsOnly) {}
+    else if (isBubbles()) { if (CUBE.held) dropCube('Bubble Pop'); bubbleStep(dt, now); }
+    else { gripStep(dt); palmsOnSurface(); taskStep(dt); }
   }
   SNAP = buildSnap();
 }
@@ -722,7 +731,7 @@ function buildSnap() {
   }
   return { ok: true, body: b, yaw: r3(AV.yaw), arms, strings: SET.strings,
     cube: { c: a3(CUBE.c), yaw: r3(CUBE.yaw), s: r3(CUBE.scale), held: CUBE.held, appear: r3(CUBE.appear) },
-    armsOnly: SET.armsOnly, armsView: SET.armsView, thread: SET.thread, plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], target: TARGET.on ? [r3(TARGET.p.x), r3(TARGET.p.z)] : null, ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
+    armsOnly: SET.armsOnly, armsView: SET.armsView, bub: isBubbles() ? bubSnap() : null, legs: { L: legOwner('L'), R: legOwner('R') }, thread: SET.thread, plinth: [r3(PLINTH.p.x), r3(PLINTH.p.z)], target: TARGET.on ? [r3(TARGET.p.x), r3(TARGET.p.z)] : null, ghost, chap: chapSnap(), hud: hudSnap(), centre: centreSnap() };
 }
 function hudSnap() {
   return { drift: r3(FOLLOW.drift), tol: SET.tol, turn: Math.round(FOLLOW.turn), turnTol: SET.turnTol, state: FOLLOW.state,

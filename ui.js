@@ -49,6 +49,7 @@ function hudStep(S) {
   }
   $('prompt').textContent = pr; $('prompt').style.opacity = pr ? 1 : 0;
   $('prompt').classList.toggle('held', !!h.held); $('prompt').classList.toggle('apart', h.state === 'apart');
+  bubbleHud(S);   // Bubble Pop takes over the HUD when it's on (bubbles.js)
 }
 function statsStep(S) {
   let el = $('stats'); el.style.display = SET.hud ? 'block' : 'none'; if (!SET.hud) return;
@@ -61,10 +62,11 @@ function statsStep(S) {
     `${SET.spaces === 2 ? '2 SPACES · ' + (NET.role || 'offline') + ' · ' + NET.status + (NET.rtt ? ' · ping ' + Math.round(NET.rtt) + ' ms' : '') + (NET.connected ? ' · in ' + NET.rxRate.toFixed(0) + '/s' + (NET.role === 'host' ? ' · P2 body ' + Math.round(performance.now() - NET.bodyT) + ' ms ago' : '') : '') : '1 SPACE'} · P1 ${h && h.p1 ? 'tracked' : '-'} · P2 ${h && h.p2 ? 'tracked' : '-'}`,
     h ? `follow ${h.state} · drift ${h.drift.toFixed(2)} / ${h.tol} m · turn ${h.turn}° / ${h.turnTol}° · lost ${TASK.lost}` : '',
     `arms ${armTxt}`,
+    bubbleStatsLine(S),
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
     SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => { let M = MPF[k], p = people[k]; return 'P' + k + ' ' + M.src + (M.meas ? ' (' + M.meas.filter(Boolean).length + ' of 33 joints measured)' : '') + ' ' + (M.d ? M.d.toFixed(2) : '-') + ' m · lean ' + Math.round(M.lean || 0) + '° · camera tilt ' + Math.round((M.pitch || 0) * 57.3) + '° (shape ' + (M.T ? M.T.x.toFixed(2) + ',' + M.T.z.toFixed(2) : 'none') + ' · size ' + (M.dU ? M.dU.toFixed(2) : '-') + ') · body at ' + (p && p.j ? p.j.pelvis.x.toFixed(2) + ',' + p.j.pelvis.z.toFixed(2) : '-') + (AV.ok ? ' · room ' + AV.root.x.toFixed(2) + ',' + AV.root.z.toFixed(2) : ''); }).join(' · ') + (CAL.active ? ' · MEASURING ' + (CAL.live ? rectW(CAL.live).toFixed(2) + '×' + rectD(CAL.live).toFixed(2) : 'nobody yet') : '') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
-    `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · R restart · S solo · O log · D stats · F fullscreen`
+    `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · B bubbles · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
   if (guest) el.textContent += '\nlinked as P2: the world comes from the host';
@@ -153,6 +155,7 @@ function pipStep() {
     }
     x.strokeStyle = 'rgba(120,230,255,0.95)'; x.lineWidth = 1.5;
     for (let hd of MP.handsFound || []) { for (let [a, b] of HAND_BONES) { x.beginPath(); x.moveTo(hd.lm[a].x * w, hd.lm[a].y * h); x.lineTo(hd.lm[b].x * w, hd.lm[b].y * h); x.stroke(); } }
+    bubblePipMarks(x, w, h);   // Bubble Pop: ankles, the jump meter, JUMP!
     x.restore();
   } else {
     // no webcam: both people seen from the front (A space), and a floor plan of the drift
@@ -177,6 +180,7 @@ function pipStep() {
     }
     x.fillStyle = '#8a95a1'; x.font = '10px monospace'; x.fillText('moved since attached', cx - 55, cy + 68);
   }
+  if (cam) bubblePipFrame(x, w, h);   // Bubble Pop: green / red frame for the feet, and the clap window
   x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands' + (MP.fromPhone && PHONE.cam && PHONE.cam.held ? ' · phone ' + PHONE.cam.held : '') + ' · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
 }
 
@@ -319,6 +323,13 @@ function setupPanel() {
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
   $('btn-arms').onclick = toggleArms;
+  // Bubble Pop (bubbles.js)
+  $('btn-game').onclick = toggleGame;
+  sel('game', 'game', () => { LEGS.init = false; if (!isGuest()) restartWorld(); });
+  sel('legp2', 'legP2', () => { LEGS.init = false; });
+  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; }); tog('btn-boost', 'jumpBoost'); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
+  tog('btn-sound', 'sound', () => { if (SET.sound) snd(); });
+  sl('bubn', 'bubbleN', v => Math.round(v) + ' bubbles'); sl('bubt', 'roundS', v => v + ' s'); sl('jthr', 'jumpThr', v => Math.round(v * 100) + ' cm');
   $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
   $('btn-restart').onclick = restartAll; $('btn-log').onclick = saveLog; $('btn-viewq').onclick = () => { cycleView(); updatePanel(); };
   // the panel remembers which sections you left open
@@ -349,6 +360,13 @@ function updatePanel() {
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
+  // Bubble Pop
+  quick('btn-game', SET.game === 'bubbles');
+  set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
+  set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-sound', 'Sound on this laptop: ', SET.sound);
+  cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-shonly', SET.legSplit && SET.jumpBoost);
+  $('game').value = SET.game; $('legp2').value = SET.legP2;
+  for (let [id, key, f] of [['bubn', 'bubbleN', v => Math.round(v) + ' bubbles'], ['bubt', 'roundS', v => v + ' s'], ['jthr', 'jumpThr', v => Math.round(v * 100) + ' cm']]) { $(id).value = SET[key]; $('val-' + id).textContent = f(SET[key]); }
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
   $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
@@ -371,7 +389,7 @@ function updatePanel() {
   $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
-  let lock = isGuest(), p2own = ['btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
+ let lock = isGuest(), p2own = ['btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
@@ -458,7 +476,7 @@ function flowStep() {
   let p2ok = SET.spaces === 1 || SET.comp !== 'off' || SET.solo || !!live2();
   $('fs3-text').innerHTML = (mineSlots.length === 2 ? 'The two biggest people in the picture become P1 (screen left) and P2.' : 'The biggest person in your camera is followed as ' + (mineSlots[0] === 1 ? 'P1' : 'P2') + '; anyone else is ignored after START.') +
     '<br><span class="' + (seen.length === mineSlots.length ? 'ok' : 'wait') + '">' + (seen.length === mineSlots.length ? '✓ Found you' : 'Looking for you…') + ' · ' + n + ' in the picture</span>' +
-    (!guest && SET.spaces === 2 && SET.comp === 'off' && !SET.solo ? ' · <span class="' + (p2ok ? 'ok' : 'wait') + '">' + (p2ok ? '✓ P2 found' : linked ? 'P2 not found yet' : 'P2 not linked yet') + '</span>' : '');
+    (!guest && SET.spaces === 2 && SET.comp === 'off' && !SET.solo ? ' · <span class="' + (p2ok ? 'ok' : 'wait') + '">' + (p2ok ? '✓ P2 found' : linked ? 'P2 not found yet' : 'P2 not linked yet') + '</span>' : '') + feetNote();
   $('fs3').classList.toggle('done', seen.length === mineSlots.length && p2ok);
   // START
   let ready = done1 && seen.length === mineSlots.length && p2ok && (!linked || NET.otherDone || !!CAL.other);
@@ -475,6 +493,12 @@ function toggleArms() {
   else { toast('Arms only off'); restartWorld(); }
   updatePanel();
 }
+// BUBBLE POP on / off (back to carrying the cube)
+function toggleGame() {
+  if (isGuest()) { toast('P1’s laptop decides this'); return; }
+  SET.game = SET.game === 'bubbles' ? 'carry' : 'bubbles'; LEGS.init = false;
+  restartWorld(); toast(SET.game === 'bubbles' ? 'Bubble Pop' : 'Carry the cube'); updatePanel();
+}
 function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
 
 // ---------------- keys ----------------
@@ -483,7 +507,7 @@ window.addEventListener('keydown', e => {
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
-  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
+  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrokb'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();
@@ -493,6 +517,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'o') saveLog();
   else if (k === 'a') toggleArms();
   else if (k === 'k') toggleCheat();
+  else if (k === 'b') toggleGame();
   else if (k === 'd') SET.hud = !SET.hud;
   else if (k === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
   else return;
@@ -505,6 +530,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min(0.05, Math.max(0.001, (now - lastT) / 1000)); lastT = now;
   trackTick(now, dt);
+  bubbleLocalTick(now);
   calTick();
   netTick(now);
   let S;

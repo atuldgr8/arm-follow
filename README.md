@@ -7,6 +7,26 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.19 (26 Oct): Bubble Pop
+
+A second game, from `prototypes/bubble-pop-build.md` (built in the tasks brainstorm chat). Switch with **Game** (top of the panel), the **Bubbles** quick button, or **B**. Carrying the cube is unchanged.
+
+- **The round:** 8 bubbles around the room (slider), 1 minute (slider). A 3-2-1 count, then GO. All popped = **CLEARED** and a new layout; time runs out = **TIME’S UP** and the same layout again. Either way the next round starts by itself after 5 s. The clock is top left, bubbles left top right.
+- **Popping:** **mid** bubbles (blue) need **two hands** touching at the same moment, whoever owns them. **Low** bubbles (green, on the floor) need **two feet** on them, any way. **High** bubbles (violet) are just past standing reach: **jump** with both hands up. Gold ones (optional) only a **jump together** reaches. A bubble wobbles and glows while one hand or foot is on it; the prompt says what's missing.
+- **Placed for your body:** heights come from the body's own shoulders and reach, so nothing is out of range; spots come from your measured floor (not its front third), at least 1 m apart. Every bubble has a shadow and a ring on the floor; high ones a dashed line down to it.
+- **The same-moment window** is 0.3 s, and never shorter than the measured delay between the laptops + 0.15 s, so slow Wi-Fi can't make a real clap fail. The camera view (top right) and the stats show the window and the link delay.
+- **No falling-off arm** in this mode (the follow rule is off). Who owns which arm is set as usual (Who owns what).
+- **Jumping:** a jump is your hips **and** shoulders rising together, quickly, past **A hop counts from** (7 cm). The camera view shows a meter beside your hips (the tick is the threshold) and **JUMP!** when one fires. The body's jump is weighty: rises a little slower, hangs at the top, lands heavier (a thud and a small camera shake).
+- **Split the legs** (switch): P2 gets one leg (**P2 gets**: right or left), drawn in P2's colour from P2's own leg. The body only **walks** when both step the same general way, at the slower one's speed (the hurdle walk, from the old main build's Split 3). **Jumping:** both within the window = **twice as high** (switch); only one = a **lopsided hop**, just that side of the body lifts. Leg split off: P1 owns both legs and jumps normally.
+- **Bubbles drift** (switch): they wander slowly while the round is on.
+- **The frame check:** feet and jumping need head to toe in the picture. Step 3 of the getting-ready card says whether your feet are in; during play a red banner says *step back*; the camera view gets a green frame (feet in) or a red dashed one, and rings your ankles green or red.
+- **Sound** (each laptop its own switch): pops (higher for higher bubbles), landings, the count, cleared and time's up, and a whoosh for a jump together.
+- **The log** (O) records every pop (which kind, whose hand or foot got there first, the gap between the two, in the air or not), every jump (who, lopsided or together) and every round.
+- **Demo people** play it too: P1 walks the body to the nearest bubble and pops it; P2 copies a quarter of a second late, so with the legs split they walk together and their jumps land within the window.
+- The FOV slider is still there (to be removed later, and worked out from calibration if distances need it).
+
+**Tested here:** the demo people through whole rounds (hands, feet, jumps, cleared), legs split (hurdle walk, a lopsided hop when 340 ms apart, a jump together when 280 ms apart, a gold bubble popped in the air), drifting, the two-laptop link in two tabs (P2's laptop draws the game, the window widened to cover a 164 ms delay), and a made-up webcam person: a hop read as 12 cm and counted once; crouching and standing up slowly read as 2 cm and didn't. **Not tested:** real webcams and real jumps (MediaPipe can't load in the test sandbox). Likely tuning: **A hop counts from**, and `SET.touch` for how close counts as touching.
+
 ## v1.18.6 (26 Oct): webcam + iPhone depth, podiums stop you, first person turns with you
 - **Webcam + iPhone depth** (Input list, one per webcam). The webcam finds your body; the iPhone, right beside the webcam and facing the same way, in **Camera + depth** mode, measures how far away each joint is with its LiDAR, including where you stand. The two cameras **line themselves up**: a second, light body model reads the phone's pictures a few times a second and fits the same joints seen by both. Stand where both see all of you for a few seconds. Under Connect it says "Lining up…", then "Lined up ✓ · LiDAR measures N of 33 joints". Until lined up, the webcam guesses as before. The camera view shows the LiDAR zone (cyan) on the webcam picture and rings the measured joints. No phone app update needed.
 - **Solid podiums just stop you** where you were, instead of pushing you out sideways.
@@ -153,6 +173,7 @@ Found by replaying Atul's log of 24 Oct, frame by frame:
 - `scene.js`: draws it all in 3D: the room, the mannequin, hands with fingers, the strings, the three views.
 - `floor.js`: measuring your real floor, and fitting the room to it.
 - `net.js`: the 2-spaces link.
+- `bubbles.js`: Bubble Pop: the bubbles, jumping, the hurdle walk, its demo, drawing, sound and HUD.
 - `ui.js`: HUD, panel, keys, the camera + skeletons view, the log, and the main loop.
 
 ## Running it
@@ -274,7 +295,7 @@ A plain white room. Only the content is in colour: the cobalt cube, P2's vermili
 
 ## Keys
 
-H panel · J camera + skeletons · V view · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen
+H panel · J camera + skeletons · V view · B Bubble Pop · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen
 
 ## Choices I made that the build instruction didn't settle (check these)
 

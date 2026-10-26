@@ -68,9 +68,11 @@ function sceneInit(container) {
   SC.parts.pelvis = mk(SC.parts.sph);
   SC.parts.neck = mk(SC.parts.cyl);
   SC.parts.head = mk(SC.parts.sph);
-  SC.parts.legs = {};
+  SC.parts.legs = {}; SC.parts.legMat = {};
   for (let s of ['L', 'R']) {
-    SC.parts.legs[s] = { thigh: mk(SC.parts.cyl), shin: mk(SC.parts.cyl), knee: mk(SC.parts.sph), foot: mk(new THREE.BoxGeometry(0.1, 0.07, 0.24)) };
+    // each leg has its own colour, so a leg P2 owns (Bubble Pop, legs split) shows in P2's colour
+    let lm = SC.parts.legMat[s] = new THREE.MeshStandardMaterial({ color: COL.body, roughness: 0.7 });
+    SC.parts.legs[s] = { thigh: mk(SC.parts.cyl, lm), shin: mk(SC.parts.cyl, lm), knee: mk(SC.parts.sph, lm), foot: mk(new THREE.BoxGeometry(0.1, 0.07, 0.24), lm) };
   }
   SC.parts.arms = {};
   for (let s of ['L', 'R']) {
@@ -141,6 +143,8 @@ const basisQ = (x, y, z) => new THREE.Quaternion().setFromRotationMatrix(new THR
 // ---------------- draw one frame ----------------
 function sceneRender(S, dt) {
   let P = SC.parts;
+  SC.lastSnap = S;
+  if (typeof bubbleRender === 'function') bubbleRender(S, dt);   // Bubble Pop (bubbles.js)
   P.body.visible = !!(S && S.ok);
   for (let s of ['L', 'R']) { P.arms[s].g.visible = !!(S && S.ok); }
   if (!S || !S.ok) { P.strings.visible = false; cameraStep(null, dt); SC.renderer.render(SC.scene, SC.camera); return; }
@@ -163,6 +167,7 @@ function sceneRender(S, dt) {
   let fwd = new V3(Math.sin(S.yaw * Math.PI / 180), 0, -Math.cos(S.yaw * Math.PI / 180));
   for (let s of ['L', 'R']) {
     let L = P.legs[s];
+    P.legMat[s].color.setHex(S.legs && S.legs[s] === 2 ? COL.p2 : COL.body);
     seg(L.thigh, b['hip' + s], b['kn' + s], 0.07); seg(L.shin, b['kn' + s], b['an' + s], 0.055); ball(L.knee, b['kn' + s], 0.06);
     L.foot.position.copy(b['an' + s]).addScaledVector(fwd, 0.06).setY(Math.max(0.035, b['an' + s].y - 0.04));
     L.foot.rotation.set(0, -S.yaw * Math.PI / 180, 0);
@@ -195,8 +200,9 @@ function sceneRender(S, dt) {
 
   // plinth and cube
   P.plinth.position.set(S.plinth[0], PLINTH.h / 2, S.plinth[1]);
-  P.plinth.visible = !S.armsOnly; P.cube.visible = !S.armsOnly;   // arms only: nothing to pick up
-  P.target.visible = !!S.target && !S.armsOnly;
+  let noCube = S.armsOnly || !!S.bub;   // arms only: nothing to pick up; Bubble Pop: bubbles instead
+  P.plinth.visible = !noCube; P.cube.visible = !noCube;
+  P.target.visible = !!S.target && !noCube;
   if (S.target) { P.target.position.set(S.target[0], PLINTH.h / 2, S.target[1]); P.targetTop.material.opacity = 0.55 + 0.4 * Math.sin(performance.now() / 300) ** 2; }
   P.cube.position.copy(fromArr(S.cube.c)); P.cube.rotation.set(0, S.cube.yaw, 0);
   let pop = S.cube.appear > 0 ? 1 - S.cube.appear : 1;
@@ -235,14 +241,23 @@ function sceneRender(S, dt) {
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid
   // and while the view cuts to first person, the body fades so the camera doesn't pass through a solid torso
   let fade = Math.min(SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, 1 - 0.65 * clamp(SC.fp * 4, 0, 1)), bm = SC.parts.bodyMat;
-  if (Math.abs(bm.opacity - fade) > 0.005) { bm.opacity = fade; let t = fade < 0.99; if (bm.transparent !== t) { bm.transparent = t; bm.depthWrite = !t; bm.needsUpdate = true; } }
+  for (let m of [bm, SC.parts.legMat.L, SC.parts.legMat.R]) {
+    if (Math.abs(m.opacity - fade) > 0.005) { m.opacity = fade; let t = fade < 0.99; if (m.transparent !== t) { m.transparent = t; m.depthWrite = !t; m.needsUpdate = true; } }
+  }
   cameraStep(S, dt, b);
   // P1's laptop records its camera, so P2's laptop can show the same view
   if (!isGuest()) {
     let dir = new V3(); SC.camera.getWorldDirection(dir);
     S.cam = { p: a3(SC.camera.position), l: a3(SC.camera.position.clone().add(dir)), fov: r3(SC.camera.fov), exam: r3(SC.exam), fp: r3(SC.fp) };
   }
+  // Bubble Pop: a small shake when the body lands (heavier for a jump together). Each laptop shakes its own view.
+  let shook = null;
+  if (SC.shake > 0.01 && SET.view !== 'orbit') {
+    shook = new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(0.035 * SC.shake);
+    SC.camera.position.add(shook); SC.shake *= Math.max(0, 1 - dt * 5);
+  }
   SC.renderer.render(SC.scene, SC.camera);
+  if (shook) SC.camera.position.sub(shook);
 }
 function drawFloorEdges(ch) {
   let P = SC.parts;
@@ -343,11 +358,12 @@ function cameraStep(S, dt, b) {
     return;
   }
   // behind the body, over the right shoulder
-  let want = root.clone().addScaledVector(fwd, -2.3).addScaledVector(right, 0.75).add(new V3(0, 2.15, 0));
-  let look = root.clone().addScaledVector(fwd, 1.6).addScaledVector(right, -0.1).add(new V3(0, 0.75, 0));
+  let bubM = !!S.bub;   // Bubble Pop: a little further back and looking higher, so bubbles overhead and on the floor both show
+  let want = root.clone().addScaledVector(fwd, bubM ? -2.7 : -2.3).addScaledVector(right, 0.75).add(new V3(0, bubM ? 2.05 : 2.15, 0));
+  let look = root.clone().addScaledVector(fwd, 1.6).addScaledVector(right, -0.1).add(new V3(0, bubM ? 1.2 : 0.75, 0));
   // near the cube (or holding it) the camera moves in to examine, so you can see where your hands are
   let c = fromArr(S.cube.c), d = Math.hypot(c.x - root.x, c.z - root.z);
-  let eT = SET.examine === 'off' || SET.fpNear ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
+  let eT = SET.examine === 'off' || SET.fpNear || bubM ? 0 : S.cube.held ? 1 : clamp((SET.examineDist - d) / 0.5, 0, 1);
   SC.exam += (eT - SC.exam) * Math.min(1, dt * 2.5);
   if (!SC.cubeS || SC.cubeS.distanceTo(c) > 1) SC.cubeS = c.clone();
   SC.cubeS.lerp(c, Math.min(1, dt * 4));
@@ -366,8 +382,8 @@ function cameraStep(S, dt, b) {
   // sticky: it switches in at examineDist but only switches out 0.7 m further away, and never within 1.5 s
   // of switching (before, hovering near the line flipped the view back and forth)
   let nearD = !S.cube.held ? h.near : carry && S.target ? h.nearT : 0;
-  let fpIn = SET.fpNear && (nearD < SET.examineDist || (S.cube.held && !carry));
-  let fpOut = !SET.fpNear || (nearD > SET.examineDist + 0.7 && !(S.cube.held && !carry));
+  let fpIn = SET.fpNear && !bubM && (nearD < SET.examineDist || (S.cube.held && !carry));
+  let fpOut = !SET.fpNear || bubM || (nearD > SET.examineDist + 0.7 && !(S.cube.held && !carry));
   let tNow = performance.now();
   if (!SC.fpOn && fpIn && tNow - (SC.fpAt || 0) > 1500) { SC.fpOn = true; SC.fpAt = tNow; }
   else if (SC.fpOn && fpOut && (tNow - (SC.fpAt || 0) > 1500 || !SET.fpNear)) { SC.fpOn = false; SC.fpAt = tNow; }
@@ -389,7 +405,7 @@ function cameraStep(S, dt, b) {
   let eyeF = SC.eyeS.clone().addScaledVector(hf, 0.1);
   let lookF = eyeF.clone().addScaledVector(hf, 1).add(new V3(0, -0.55, 0));
   if (f > 0.001) { want.lerp(eyeF, f); look.lerp(lookF, f); }
-  let fovT = 55 + 25 * f;
+  let fovT = (bubM ? 62 : 55) + 25 * f;
   if (Math.abs(cam.fov - fovT) > 0.05) { cam.fov = fovT; cam.updateProjectionMatrix(); }
   let k = Math.min(1, dt * (5 - 2.5 * SC.exam + 4 * f));   // calmer while examining; follows the calmed eye in first person
   SC.camPos.lerp(want, k); SC.camLook.lerp(look, k);

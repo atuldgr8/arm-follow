@@ -13,6 +13,17 @@
 // ============================================================
 
 const SET = {
+  // ---- the game (Bubble Pop: bubbles.js, from prototypes/bubble-pop-build.md) ----
+  game: 'carry',         // 'carry' (carry the cube to the other plinth) | 'bubbles' (Bubble Pop)
+  bubbleN: 8,            // bubbles in a round
+  roundS: 60,            // seconds in a round
+  legSplit: false,       // P2 gets one leg; the body walks only when both step the same way (hurdle walk)
+  legP2: 'R',            // which leg P2 gets when they're split
+  jumpBoost: true,       // both jumping together = twice as high
+  sharedOnly: false,     // some high bubbles need the shared jump (needs the legs split and the boost)
+  drift: false,          // bubbles drift slowly
+  jumpThr: 0.07,         // a hop counts once hips and shoulders rise this far together (m)
+  sound: true,           // pops, landings and the timer, on this laptop
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)
@@ -148,6 +159,13 @@ function setPerson(id, key, raw, now, smoothIt) {
   let p = people[id];
   if (!p || (key && p.key && p.key !== key)) p = people[id] = { id, key, f: {}, j: null, hands: { L: null, R: null }, lastSeen: 0, lost: false, home: null, yaw: 0, vel: V(0, 0, 0) };
   p.key = key; p.chir = raw.chir === undefined ? 1 : raw.chir; p.lm = raw.lm || null;
+  // jumping (Bubble Pop): how far hips and shoulders have risen together (m), and the lowest it was in the
+  // last 0.4 s, so a quick hop counts and standing up slowly doesn't (whatever the camera's frame rate)
+  if (raw.up !== undefined) {
+    p.up = raw.up; let H = p.upHist || (p.upHist = []);
+    H.push([now, raw.up]); while (H.length > 1 && now - H[0][0] > 400) H.shift();
+    p.upMin = H.reduce((m, e) => Math.min(m, e[1]), raw.up);
+  }
   if (raw.img) { p.img = raw.img; p.size = raw.size; p.ankY = raw.ankY; p.dist = raw.dist; p.distT = raw.distT; p.lmS = raw.lmS; }
   let t = now / 1000, fz = feel(), j = {}, glide = smoothIt === 'glide';
   if (smoothIt === true) {
@@ -477,6 +495,20 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   M.fd = M.fd || new OneEuro(); M.fl = M.fl || new OneEuro();
   let dS = M.fd.filter(dIn, t, fr.minC, fr.beta), latS = M.fl.filter(latIn, t, fr.minC * 1.5, fr.beta);
   M.d = dS; M.latS = latS; M.src = src; M.dU = dU; M.T = T; M.raw = d; M.lean = lean; M.pitch = pitch;
+  // JUMPING (Bubble Pop): how far the hips AND the shoulders have risen together above where they
+  // usually are, in metres, from the raw picture (so it's quick). The baseline settles to where you
+  // usually stand, slowly when you crouch, hardly at all while you're up.
+  {
+    let rl = c.lm, okv = i => rl[i] && (rl[i].visibility === undefined || rl[i].visibility > 0.5);
+    if ([11, 12, 23, 24].every(okv)) {
+      let hy = (rl[23].y + rl[24].y) / 2, sy = (rl[11].y + rl[12].y) / 2, mpp = dS / fpx * H;   // metres per picture height
+      let J = M.jb || (M.jb = { h: hy, s: sy, t: t, up: 0 });
+      let rise = Math.min((J.h - hy) * mpp, (J.s - sy) * mpp), dtJ = clamp(t - J.t, 0, 0.2);
+      J.t = t; J.up = Math.max(0, rise);
+      let k = Math.min(1, dtJ * (rise > 0.03 ? 0.05 : rise < -0.03 ? 0.3 : 1.5));
+      J.h += (hy - J.h) * k; J.s += (sy - J.s) * k;
+    } else if (M.jb) M.jb.up = 0;
+  }
   // STANDING STILL STAYS STILL. Even smoothed, the guess of where you stand wanders 1–2 cm (more in depth),
   // and the walk gain doubles it. A soft dead zone: wobbles smaller than the zone are ignored; a real step
   // pushes the body along (it trails the step by the zone's width, then catches up as you settle).
@@ -548,7 +580,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
   }
   j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
   gestureTick(slot, lm, now);
-  return { key: null, j, chir: c.chir, lm: c.lm, lmS: lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: dS, distT: dB };
+  return { key: null, j, chir: c.chir, lm: c.lm, lmS: lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: dS, distT: dB, up: M.jb ? M.jb.up : 0 };
 }
 // give each hand the hand model found to the nearest wrist the body model found
 function matchHands(list, sx, chir) {
@@ -656,7 +688,7 @@ function unlockPeople() { LOCK.on = false; LOCK.slots = {}; }
 // MADE-UP PEOPLE: the demo, and the computer partner
 // =====================================================================
 // a standing person in A space. arms: { L|R: { wr (wrist, A space), n, f } } or null = hanging
-function makePerson(px, pz, walkPhase, walkAmt, arms) {
+function makePerson(px, pz, walkPhase, walkAmt, arms, lift) {
   let j = {}, bob = Math.abs(Math.sin(walkPhase)) * 0.02 * walkAmt;
   j.pelvis = V(px, 0.95 + bob, pz);
   j.hipL = V(px - 0.1, 0.93 + bob, pz); j.hipR = V(px + 0.1, 0.93 + bob, pz);
@@ -680,7 +712,8 @@ function makePerson(px, pz, walkPhase, walkAmt, arms) {
     let v = vmul(vcross(n, f), (s === 'R' ? 1 : -1) * 0.06), tip = vadd(wr, vmul(f, 0.08));
     j['in' + s] = vsub(tip, vmul(v, 0.5)); j['pi' + s] = vadd(tip, vmul(v, 0.5)); j['th' + s] = vsub(j['in' + s], vmul(f, 0.04));
   }
-  return { j, chir: 1, lm: null };
+  if (lift) for (let n in j) { j[n] = V(j[n].x, j[n].y + lift, j[n].z); }   // a demo jump
+  return { j, chir: 1, lm: null, up: lift || 0 };
 }
 // two-bone arm: where the elbow goes for a wrist target (elbow points down and out)
 function elbowFor(sh, wr, sg) {
@@ -694,8 +727,9 @@ function elbowFor(sh, wr, sg) {
 // behind (the arm falls), then hurries to catch up (it comes back). Together they lift.
 const DEMO = { reset: true, t: 0, p1: null, p2: null };
 function demoPeople(now, dt, which) {
-  if (DEMO.reset || !DEMO.p1) {
-    DEMO.reset = false;
+  if (typeof isBubbles === 'function' && isBubbles()) return demoBubbles(now, dt, which);   // bubbles.js
+  if (DEMO.reset || !DEMO.p1 || DEMO.bub) {
+    DEMO.reset = false; DEMO.bub = false;
     DEMO.p1 = { x: 0, z: 2.8, home: { x: 0, z: 2.8 }, phase: 'walk', t: 0, walk: 0, hands: null, trip: 0 };
     let x2 = SET.spaces === 1 ? 0.9 : 0;
     DEMO.p2 = { x: x2, z: 2.8, home: { x: x2, z: 2.8 }, hist: [], t: 0, distracted: 0, walk: 0 };
@@ -781,7 +815,7 @@ function compTick(now, dt) {
   if (SET.comp === 'off' || SET.source !== 'mediapipe') return;
   if (SET.comp === 'P1') { setPerson(1, 'computer', demoPeople(now, dt, 1), now, false); return; }
   let me = live(1); if (!me) return;
-  COMP.hist.push({ t: now, j: me.j, hands: me.hands, home: me.home });
+  COMP.hist.push({ t: now, j: me.j, hands: me.hands, home: me.home, up: me.up || 0 });
   while (COMP.hist.length > 2 && now - COMP.hist[1].t > SET.compDelay * 1000) COMP.hist.shift();
   let late = COMP.hist[0], home = late.home || { x: late.j.pelvis.x, z: late.j.pelvis.z };
   let off = SET.spaces === 1 ? 0.9 : 0;
@@ -793,7 +827,7 @@ function compTick(now, dt) {
   for (let n of JN) { if (late.j[n]) j[n] = vadd(late.j[n], sh); }
   let hands = {};
   for (let s of ['L', 'R']) { let h = late.hands[s]; if (h) hands[s] = { n: h.n, f: h.f, open: h.open, src: h.src }; }
-  setPerson(2, 'computer', { j, hands, chir: me.chir, lm: null }, now, false);
+  setPerson(2, 'computer', { j, hands, chir: me.chir, lm: null, up: late.up }, now, false);
 }
 
 // ---------------- sources ----------------

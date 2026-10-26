@@ -49,6 +49,13 @@
     #calib .small { font-size: clamp(14px, 1.5vw, 20px); color: var(--ink2); margin-top: 10px; line-height: 1.5; }
     #calib .gbar { width: 260px; height: 6px; border-radius: 3px; background: var(--field); margin-top: 14px; overflow: hidden; }
     #calib .gbar div { height: 100%; width: 0; background: var(--ink); }
+    /* Bubble Pop: the round's clock, the frame check, and the big countdown / result */
+    #timer { position: absolute; top: 16px; left: 20px; font-size: 12px; letter-spacing: 2px; color: var(--ink); background: var(--card); border: 1px solid var(--edge); padding: 6px 12px; border-radius: 999px; pointer-events: none; display: none; font-variant-numeric: tabular-nums; }
+    #timer.low { background: var(--red); border-color: var(--red); color: #fff; }
+    #feet { position: absolute; top: 186px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: var(--red); color: #fff; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; pointer-events: none; display: none; white-space: nowrap; z-index: 4; }
+    #bigmsg { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; pointer-events: none; text-align: center; background: rgba(255,255,255,0.9); border: 1px solid var(--edge); border-radius: 22px; padding: 18px 34px 16px; z-index: 6; box-shadow: 0 12px 40px rgba(0,0,0,0.08); max-width: 80%; }
+    #bigmsg .big { font-size: clamp(40px, 7vw, 96px); letter-spacing: 6px; font-weight: 500; line-height: 1.05; }
+    #bigmsg .small { font-size: clamp(13px, 1.4vw, 18px); color: var(--ink2); margin-top: 8px; line-height: 1.5; }
     #toast { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 15px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 6; }
     /* ---- the start flow (on the stage) ---- */
     #flow { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(540px, 92%); background: var(--card); border: 1px solid var(--edge); border-radius: 18px; padding: 16px 18px 14px; font-size: 13px; line-height: 1.5; display: none; z-index: 5; counter-reset: step; box-shadow: 0 12px 36px rgba(0,0,0,0.07); }
@@ -155,6 +162,9 @@
         <div class="meter thin" id="m-turn"><div class="fill"></div><div class="mark"></div></div>
       </div>
       <div id="score">CUBES 0</div>
+      <div id="timer">1:00</div>
+      <div id="feet"></div>
+      <div id="bigmsg"><div class="big" id="big-a"></div><div class="small" id="big-b"></div></div>
       <div id="hold"><div style="margin-bottom:6px">HOLD</div><div class="meter"><div class="fill"></div></div></div>
       <div id="prompt"></div>
       <div id="waiting"></div>
@@ -178,9 +188,30 @@
     <div id="panel">
       <div id="ptitle">Arm Follow <span id="pver"></span></div>
       <div id="quick">
-        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera<kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats<kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View<kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo<kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate<kbd>C</kbd></button><button id="btn-setup" title="Back to the start: measure the floor again, or re-pick who's followed">Setup</button><button id="btn-arms" title="Just your arms (and P2’s possessed arm): the body stays put, nothing falls off, nothing to do. For feeling the tracking.">Arms only<kbd>A</kbd></button><button id="btn-restart">Restart<kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log<kbd>O</kbd></button><button id="btn-cheat" style="grid-column:1/-1" title="Cheat mode: every helper on (hand assist, hold your place while reaching, solid plinths, see-through cube, first person near the cube, steadiest tracking). Regular: all off. Each mode remembers your own tweaks to those settings.">Cheat mode<kbd>K</kbd></button>
+        <button id="btn-pip" title="The live camera with the tracked skeletons on it">Camera<kbd>J</kbd></button><button id="btn-hud" title="Stats for you, bottom left">Stats<kbd>D</kbd></button><button id="btn-viewq" title="Behind → first person → free orbit">View<kbd>V</kbd></button><button id="btn-solo" title="You are P1 and P2 at once: the arm never falls, handy for trying grips">Solo<kbd>S</kbd></button><button id="btn-cal" title="Press, walk to your front, back, left and right edges, press again">Calibrate<kbd>C</kbd></button><button id="btn-setup" title="Back to the start: measure the floor again, or re-pick who's followed">Setup</button><button id="btn-arms" title="Just your arms (and P2’s possessed arm): the body stays put, nothing falls off, nothing to do. For feeling the tracking.">Arms only<kbd>A</kbd></button><button id="btn-restart">Restart<kbd>R</kbd></button><button id="btn-log" title="Save everything that happened as a file">Log<kbd>O</kbd></button><button id="btn-game" title="Bubble Pop on / off (back to carrying the cube)">Bubbles<kbd>B</kbd></button><button id="btn-cheat" style="grid-column:span 2" title="Cheat mode: every helper on (hand assist, hold your place while reaching, solid plinths, see-through cube, first person near the cube, steadiest tracking). Regular: all off. Each mode remembers your own tweaks to those settings.">Cheat mode<kbd>K</kbd></button>
       </div>
       <div class="note" id="lock-all" style="display:none;">Linked as P2: P1’s laptop decides the experience. You can measure your floor, pick your camera, its field of view and mirroring, or disconnect.</div>
+      <details data-key="game" open style="--tint:#8EE3F5">
+        <summary><span class="ico"></span><span class="st">Game</span> <span class="tip" title="Carry the cube, or Bubble Pop: pop a set of bubbles around the room within the round. Two hands at once for each one, two feet for the low ones (on the floor), a jump for the high ones. No falling-off arm in Bubble Pop.">ⓘ</span></summary>
+        <div class="card">
+          <div class="f"><label>Game</label><select id="game" class="world"><option value="carry">Carry the cube</option><option value="bubbles">Bubble Pop</option></select></div>
+          <div class="cond" id="g-bub" data-why="Bubble Pop settings · choose Bubble Pop">
+          <div class="f"><label>Bubbles in a round<span class="tip" title="A quarter low (feet), a quarter high (jump), the rest in reach (hands). Takes effect from the next round.">ⓘ</span><span class="val" id="val-bubn"></span></label><input type="range" id="bubn" class="world" min="3" max="16" step="1"></div>
+          <div class="f"><label>Round length<span class="val" id="val-bubt"></span></label><input type="range" id="bubt" class="world" min="20" max="180" step="10"></div>
+          <button class="sw world" id="btn-legsplit" title="P2 gets one of the body’s legs. The body only walks when both of you step the same general way (at the slower one’s speed), and a jump only goes up properly when both jump."></button>
+          <div class="cond" id="g-leg" data-why="Which leg · when the legs are split">
+          <div class="f"><label>P2 gets</label><select id="legp2" class="world"><option value="R">The right leg</option><option value="L">The left leg</option></select></div>
+          </div>
+          <button class="sw world" id="btn-boost" title="Legs split: both jumping within the same moment makes the body jump twice as high. Only one jumping = a lopsided hop on that side."></button>
+          <div class="cond" id="g-shonly" data-why="Shared-jump bubbles · needs the legs split and jumping together">
+          <button class="sw world" id="btn-shonly" title="About half the high bubbles (gold) are too high for a single jump: only jumping together reaches them. Takes effect from the next round."></button>
+          </div>
+          <button class="sw world" id="btn-drift" title="The bubbles drift slowly while the round is on (harder)."></button>
+          <div class="f"><label>A hop counts from<span class="tip" title="How far your hips and shoulders must rise together, quickly, to count as a jump. Lower = more sensitive. The camera view shows a meter beside your hips with this as its tick.">ⓘ</span><span class="val" id="val-jthr"></span></label><input type="range" id="jthr" class="world" min="0.03" max="0.15" step="0.005"></div>
+          <button class="sw" id="btn-sound" title="Pops, landings and the timer, on this laptop"></button>
+          </div>
+        </div>
+      </details>
       <details data-key="tracking" open style="--tint:#6FC3FF">
         <summary><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 8h3l2-2.5h8L18 8h3v11H3z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span><span class="st">Tracking</span></summary>
         <div class="card">
@@ -360,8 +391,8 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.18.6 · 26 Oct 01:45'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
-    for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'scene.js', 'net.js', 'ui.js']) {
+    const BUILD = '1.19 · 26 Oct 17:05'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'scene.js', 'bubbles.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }
   </script>

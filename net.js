@@ -61,16 +61,16 @@ const unpackV = a => a ? V(a[0], a[1], a[2]) : null;
 function packPerson(p) {
   let j = {}; for (let n of JN) { if (p.j[n]) j[n] = packV(p.j[n]); }
   let hands = {}; for (let s of ['L', 'R']) { let h = p.hands[s]; if (h && h.src === 'hand') hands[s] = { n: packV(h.n), f: packV(h.f), open: h.open === null ? null : r3(h.open) }; }
-  return { j, hands, chir: p.chir, human: SET.source === 'mediapipe' };
+  return { j, hands, chir: p.chir, human: SET.source === 'mediapipe', up: r3(p.up || 0) };
 }
 function unpackPerson(m) {
   let j = {}; for (let n in m.j) { j[n] = unpackV(m.j[n]); }
   let hands = {}; for (let s in (m.hands || {})) { let h = m.hands[s]; hands[s] = { n: unpackV(h.n), f: unpackV(h.f), open: h.open, src: 'hand' }; }
-  return { j, hands, chir: m.chir };
+  return { j, hands, chir: m.chir, up: m.up || 0 };
 }
 // P1's laptop decides the experience; these stay per laptop because they only make sense locally
 // (P2 also keeps what depends on its own camera: which camera, its field of view, and mirroring)
-const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror'];
+const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror', 'sound'];
 const NET_TRACKING = ['source', 'hands', 'mpModel'];   // changing these restarts P2's webcam
 
 function netOn(m) {

@@ -241,6 +241,9 @@ function phoneTick(now) {
   }
   if (!j.shL || !j.shR || !j.hipL || !j.hipR) return;
   if (!j.neck) j.neck = vmid(j.shL, j.shR);
+  // jumping (Bubble Pop): how far the hips have risen above where they usually stand (real metres, gravity-aligned)
+  let JB = PHONE.jb || (PHONE.jb = { h: yH, t }), riseP = yH - JB.h, dtJ = clamp(t - JB.t, 0, 0.2); JB.t = t;
+  JB.h += riseP * Math.min(1, dtJ * (riseP > 0.03 ? 0.05 : riseP < -0.03 ? 0.3 : 1.5));
   if (!j.head) j.head = vadd(j.neck, V(0, 0.2, 0));
   // which slot this phone fills: as with the webcam (computer partner, 2 spaces, or P1)
   let slot = SET.comp !== 'off' ? (SET.comp === 'P2' ? 1 : 2) : SET.spaces === 2 ? NET.myId : 1;
@@ -249,7 +252,7 @@ function phoneTick(now) {
   let H = m.H || 1440, W = m.W || 1920;
   let img = ok ? { x: (lm[23].x + lm[24].x) / 2, y: (lm[23].y + lm[24].y) / 2 } : { x: 0.5, y: 0.5 };
   let size = ok ? Math.hypot(((lm[11].x + lm[12].x) - (lm[23].x + lm[24].x)) / 2 * W, ((lm[11].y + lm[12].y) - (lm[23].y + lm[24].y)) / 2 * H) / H : 0.3;
-  setPerson(slot, null, { j, chir: SET.mirror ? 1 : -1, lm: ok ? lm : null, lmS: ok ? lm : null, hands: {}, img, size, dist: j.pelvis.z, distT: j.pelvis.z }, now, 'glide');
+  setPerson(slot, null, { j, chir: SET.mirror ? 1 : -1, lm: ok ? lm : null, lmS: ok ? lm : null, hands: {}, img, size, dist: j.pelvis.z, distT: j.pelvis.z, up: Math.max(0, riseP) }, now, 'glide');
   if (ok) gestureTick(slot, lm, now);
   PHONE.seen = now;
   TRK.status = 'iPhone: tracking · ' + j.pelvis.z.toFixed(2) + ' m away';
