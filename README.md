@@ -7,9 +7,13 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.19.1 (26 Oct): quick bar renamed
+- **PiP** (J): the camera picture with the skeletons (was "Camera"). **Camera** (V): behind / first person / orbit (was "View"), the current one shown under it.
+- Bubble Pop has no shortcut or quick button any more: choose it under **Game**.
+
 ## v1.19 (26 Oct): Bubble Pop
 
-A second game, from `prototypes/bubble-pop-build.md` (built in the tasks brainstorm chat). Switch with **Game** (top of the panel), the **Bubbles** quick button, or **B**. Carrying the cube is unchanged.
+A second game, from `prototypes/bubble-pop-build.md` (built in the tasks brainstorm chat). Switch with **Game** (top of the panel). Carrying the cube is unchanged.
 
 - **The round:** 8 bubbles around the room (slider), 1 minute (slider). A 3-2-1 count, then GO. All popped = **CLEARED** and a new layout; time runs out = **TIME’S UP** and the same layout again. Either way the next round starts by itself after 5 s. The clock is top left, bubbles left top right.
 - **Popping:** **mid** bubbles (blue) need **two hands** touching at the same moment, whoever owns them. **Low** bubbles (green, on the floor) need **two feet** on them, any way. **High** bubbles (violet) are just past standing reach: **jump** with both hands up. Gold ones (optional) only a **jump together** reaches. A bubble wobbles and glows while one hand or foot is on it; the prompt says what's missing.
@@ -295,7 +299,7 @@ A plain white room. Only the content is in colour: the cobalt cube, P2's vermili
 
 ## Keys
 
-H panel · J camera + skeletons · V view · B Bubble Pop · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen
+H panel · J PiP (camera + skeletons) · V camera (behind / first person / orbit) · C calibrate floor · R restart · S solo · O log · D stats · F fullscreen
 
 ## Choices I made that the build instruction didn't settle (check these)
 

@@ -66,7 +66,7 @@ function statsStep(S) {
     h ? `grip ${SET.grip} · hands on the cube ${h.touching} · ${h.held ? 'HELD' + (h.slip > 0.01 ? ' slipping ' + h.slip.toFixed(2) : '') : 'not held'}${SET.grip === 'dwell' && h.dwell > 0 ? ' · dwell ' + h.dwell.toFixed(1) : ''} · hold ${(h.hold * SET.holdTime).toFixed(1)} s · cubes ${h.score}` : '',
     handsLine(),
     SET.source === 'mediapipe' ? 'where you stand from: ' + [1, 2].filter(k => MPF[k]).map(k => { let M = MPF[k], p = people[k]; return 'P' + k + ' ' + M.src + (M.meas ? ' (' + M.meas.filter(Boolean).length + ' of 33 joints measured)' : '') + ' ' + (M.d ? M.d.toFixed(2) : '-') + ' m · lean ' + Math.round(M.lean || 0) + '° · camera tilt ' + Math.round((M.pitch || 0) * 57.3) + '° (shape ' + (M.T ? M.T.x.toFixed(2) + ',' + M.T.z.toFixed(2) : 'none') + ' · size ' + (M.dU ? M.dU.toFixed(2) : '-') + ') · body at ' + (p && p.j ? p.j.pelvis.x.toFixed(2) + ',' + p.j.pelvis.z.toFixed(2) : '-') + (AV.ok ? ' · room ' + AV.root.x.toFixed(2) + ',' + AV.root.z.toFixed(2) : ''); }).join(' · ') + (CAL.active ? ' · MEASURING ' + (CAL.live ? rectW(CAL.live).toFixed(2) + '×' + rectD(CAL.live).toFixed(2) : 'nobody yet') : '') + (CAL.rect && CAL.rect.v === 2 && CAL.rect.fa !== undefined ? '' : ' (feet: measure the floor, walking toward and away)') : '',
-    `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J camera · V view · B bubbles · R restart · S solo · O log · D stats · F fullscreen`
+    `view ${SET.view} · gain ${effGain().toFixed(1)} · floor ${CAL.rect ? rectW(CAL.rect).toFixed(1) + '×' + rectD(CAL.rect).toFixed(1) + ' m' : 'not measured'} · keys H panel · J PiP · V camera · R restart · S solo · O log · D stats · F fullscreen`
   ];
   el.textContent = lines.filter(l => l).join('\n');
   if (guest) el.textContent += '\nlinked as P2: the world comes from the host';
@@ -324,7 +324,6 @@ function setupPanel() {
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
   $('btn-arms').onclick = toggleArms;
   // Bubble Pop (bubbles.js)
-  $('btn-game').onclick = toggleGame;
   sel('game', 'game', () => { LEGS.init = false; if (!isGuest()) restartWorld(); });
   sel('legp2', 'legP2', () => { LEGS.init = false; });
   tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; }); tog('btn-boost', 'jumpBoost'); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
@@ -354,14 +353,13 @@ function updatePanel() {
   showInput(); $('tracker').value = SET.tracker; cond('g-phone', SET.tracker !== 'webcam' && SET.source !== 'demo'); cond('g-webcam', SET.tracker !== 'iphone');
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
-  $('btn-viewq').innerHTML = { behind: 'Behind', first: 'First person', orbit: 'Orbit' }[SET.view] + ' <kbd>V</kbd>';
+  $('btn-viewq').innerHTML = 'Camera <kbd>V · ' + { behind: 'behind', first: 'first person', orbit: 'orbit' }[SET.view] + '</kbd>';
   set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   // Bubble Pop
-  quick('btn-game', SET.game === 'bubbles');
   set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
   set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-sound', 'Sound on this laptop: ', SET.sound);
   cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-shonly', SET.legSplit && SET.jumpBoost);
@@ -507,7 +505,7 @@ window.addEventListener('keydown', e => {
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
-  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrokb'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
+  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();
@@ -517,7 +515,6 @@ window.addEventListener('keydown', e => {
   else if (k === 'o') saveLog();
   else if (k === 'a') toggleArms();
   else if (k === 'k') toggleCheat();
-  else if (k === 'b') toggleGame();
   else if (k === 'd') SET.hud = !SET.hud;
   else if (k === 'f') { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
   else return;
