@@ -191,6 +191,8 @@ function edgeText() {
 function chapSnap() {
   let u = usable(1); if (!u) return null;
   let a = virtOf(u.x0, u.z0), b = virtOf(u.x1, u.z1), e = edgeInfo(1), op = [0, 0, 0, 0];
-  if (e && SET.edgeWarn) op = [e.ahead, e.behind, e.left, e.right].map(d => r3(clamp(1 - d / SET.edgeDist, 0, 1)));
+  // the walls fade in when EITHER person nears an edge of the floor they use (P2's room maps onto the same walls)
+  let e2 = SET.spaces === 2 && NET.connected ? edgeInfo(2) : null;
+  if (SET.edgeWarn) op = [e, e2].filter(Boolean).reduce((o, E) => [E.ahead, E.behind, E.left, E.right].map((d, i) => Math.max(o[i], r3(clamp(1 - d / SET.edgeDist, 0, 1)))), op);
   return { r: [r3(a.x), r3(a.z), r3(b.x), r3(b.z)], op };
 }

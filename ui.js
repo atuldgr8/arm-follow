@@ -119,22 +119,30 @@ function pipStep() {
       x.fillText(slot ? 'P' + slot + (LOCK.on ? ' · locked' : '') : 'ignored', 0, 0); x.restore();
     }
     // the floor this laptop uses (or the one being measured), outlined on the picture; the centre during the walk to it
-    let my = isGuest() ? 2 : 1, fr = CAL.active ? Object.assign({}, CAL.live || {}, { fa: (CAL.rect || {}).fa, fb: (CAL.rect || {}).fb }) : usable(my);
-    if (!CAL.active && fr && fr === CAL.rect && fr.quad && !phoneOn()) {
-      x.strokeStyle = 'rgba(255,176,32,0.95)'; x.lineWidth = 2; x.setLineDash([2, 5]); x.lineCap = 'round'; x.beginPath();
-      fr.quad.forEach((q, i) => i ? x.lineTo(q[0] * w, q[1] * h) : x.moveTo(q[0] * w, q[1] * h)); x.closePath(); x.stroke(); x.setLineDash([]);
-    } else if (fr && fr.x0 !== undefined && !phoneOn()) {
-      let base = CAL.rect || {}, src = { fa: fr.fa !== undefined ? fr.fa : base.fa, fb: fr.fb !== undefined ? fr.fb : base.fb };
-      let pts = [[fr.x0, fr.z0], [fr.x1, fr.z0], [fr.x1, fr.z1], [fr.x0, fr.z1]].map(([px, pz]) => floorToPicture(src, px, pz));
-      if (pts.every(q => q)) {
-        // the floor: warm amber, dotted (the LiDAR zone is cyan, dashed)
-        x.strokeStyle = 'rgba(255,176,32,0.95)'; x.lineWidth = 2; x.setLineDash([2, 5]); x.lineCap = 'round'; x.beginPath();
-        pts.forEach((q, i) => i ? x.lineTo(q.x * w, q.y * h) : x.moveTo(q.x * w, q.y * h)); x.closePath(); x.stroke(); x.setLineDash([]);
-        let lab = pts.reduce((a, q) => q.y > a.y ? q : a, pts[0]);
-        x.save(); x.translate(lab.x * w, lab.y * h + 12); if (SET.mirror) x.scale(-1, 1); x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 10px monospace'; x.textAlign = 'center'; x.fillText('FLOOR', 0, 0); x.restore();
-        let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
-        if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
+    let my = isGuest() ? 2 : 1, mine = CAL.rect, src = { fa: (mine || {}).fa, fb: (mine || {}).fb };
+    let onPic = r => { let pts = [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]].map(([px, pz]) => floorToPicture(src, px, pz)); return pts.every(q => q) ? pts : null; };
+    let outline = (pts, col, dash, wd, label, fill) => {
+      x.strokeStyle = col; x.lineWidth = wd; x.setLineDash(dash); x.lineCap = 'round'; x.beginPath();
+      pts.forEach((q, i) => i ? x.lineTo(q.x * w, q.y * h) : x.moveTo(q.x * w, q.y * h)); x.closePath();
+      if (fill) { x.fillStyle = fill; x.fill(); } x.stroke(); x.setLineDash([]);
+      let lab = pts.reduce((a, q) => q.y > a.y ? q : a, pts[0]);
+      x.save(); x.translate(clamp(lab.x * w, 90, w - 90), Math.min(h - 4, lab.y * h + 12)); if (SET.mirror) x.scale(-1, 1); x.fillStyle = col; x.font = 'bold 10px monospace'; x.textAlign = 'center'; x.fillText(label, 0, 0); x.restore();
+    };
+    if (CAL.active) {
+      let lv = CAL.live && CAL.live.x0 !== undefined ? onPic(CAL.live) : null;
+      if (lv) outline(lv, 'rgba(255,176,32,0.95)', [2, 5], 2, 'MEASURING');
+    } else if (mine && !phoneOn()) {
+      // rooms of different sizes, both using the smaller one: your whole floor faint, the patch you play in bold
+      let use = usable(my), smaller = use && use !== mine && (rectW(use) < rectW(mine) - 0.02 || rectD(use) < rectD(mine) - 0.02);
+      let whole = mine.quad ? mine.quad.map(q => ({ x: q[0], y: q[1] })) : onPic(mine), patch = smaller ? onPic(use) : null;
+      if (whole) outline(whole, smaller ? 'rgba(255,176,32,0.45)' : 'rgba(255,176,32,0.95)', [2, 5], 2, smaller ? 'YOUR FLOOR' : 'FLOOR');
+      if (patch) outline(patch, 'rgba(255,176,32,1)', [], 3, 'PLAY HERE · the smaller room', 'rgba(255,176,32,0.16)');
+      if ((!whole || (smaller && !patch)) && !FD.on) {
+        x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 11px monospace';
+        x.fillText('The floor can’t be placed on this picture: measure it walking toward/away from the camera, or draw it', 8, h - 26); x.restore();
       }
+      let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
+      if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
     }
     // locked on, but the locked person wasn't matched just now
     if (LOCK.on && LOCK.miss) {

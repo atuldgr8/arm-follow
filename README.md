@@ -7,7 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.21 (26 Oct): draw the floor by walking it (T-pose at each corner), field of view from the camera's name
+## v1.21.1 (26 Oct): the smaller room shows on the bigger room's floor
+
+- **Both use the smaller room:** the camera view in the bigger room now shows your whole floor faintly (YOUR FLOOR) and the patch you actually play in, bold and filled: **PLAY HERE · the smaller room**. (Before, only the patch was outlined, so it wasn't clear your space had shrunk.) A drawn floor shows exactly where you marked it.
+- If a floor can't be placed on the picture (measured without walking toward and away from the camera), the camera view now says so instead of showing nothing.
+- **The grid walls** in the room fade in when **either** player nears an edge of the floor they use, not only P1.
+: draw the floor by walking it (T-pose at each corner), field of view from the camera's name
 
 - **Draw the floor from inside the picture:** open **Draw it** (or Floor → **Draw the floor on the camera**). Walk to a corner of your play area and hold a **T-pose** (arms straight out) for a second: a corner is added between your feet, with a chime and a filling bar. Then the next corner, four in all. The big words at the top are readable from across the room. Drag any corner to fix it, click to add one by hand, **Undo corner**, **Use this floor** (Enter).
 - **Its size, from walking it** (replaces v1.20's camera-height guess): while the view is open, it notes how far away you look against how low your feet are in the picture. Walking to corners near and far gives the fit between the two, the same one your feet use for where you stand, and that puts every corner in metres. If you didn't walk toward and away from the camera enough, each corner is placed where you were tracked when you marked it (rougher; it says so). A typed size still wins. Redrawing keeps what walking it taught.
