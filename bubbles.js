@@ -177,7 +177,8 @@ function bubbleRound(retry) {
   if (!retry || !BUB.layout) BUB.layout = bubbleLayout();
   BUB.list = BUB.layout.map(d => ({ id: BUB.nextId++, kind: d.kind, ns: d.ns, r: d.r, c: new V3(d.x, d.y, d.z), base: new V3(d.x, d.y, d.z), v: new V3(),
     tH: { L: -1e9, R: -1e9 }, tF: { L: -1e9, R: -1e9 }, s0: { L: 0, R: 0 }, touch: 0 }));
-  BUB.total = BUB.list.length; BUB.popped = 0; BUB.phase = 'count'; BUB.count = 3; BUB.tl = SET.roundS; BUB.go = 0; BUB.used = 0;
+  BUB.total = BUB.list.length; BUB.popped = 0; BUB.phase = 'count'; BUB.count = 3;
+  if (BUB.skipCount) { BUB.skipCount = false; BUB.phase = 'play'; BUB.count = 0; BUB.go = 0.8; }   // just counted down from the ring: no second countdown BUB.tl = SET.roundS; BUB.go = 0; BUB.used = 0;
   logEvent('round', { retry: !!retry, bubbles: BUB.total, low: BUB.list.filter(b => b.kind === 'low').length, high: BUB.list.filter(b => b.kind === 'high').length });
 }
 function bubblesReset() {

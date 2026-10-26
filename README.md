@@ -7,7 +7,14 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.26 (27 Oct): always walk onto the green ring first
+## v1.27 (27 Oct): the start flow: floor → ring → countdown → play
+
+1. **Floor, on both laptops:** **Calibrate** (walk it), **Draw it** (on the camera), or **Use saved floor** if this laptop has one (it shows its size). Nothing goes on without a floor; there's no skipping any more.
+2. **The ring:** once both laptops have their floor and both people are found, it moves to the green ring by itself (START is still there as a nudge). The body waits lifeless and lights up as each of you arrives.
+3. **Countdown:** both on the ring, then a big **3 · 2 · 1** on both screens (with a beep), then the game. Bubble Pop's first round starts straight in (no second countdown).
+- **Start now** on the ring card (P1) jumps to the countdown.
+- Demo people and the computer partner still start straight away.
+: always walk onto the green ring first
 
 - **Every start with real people** (one laptop or two, measured floor or not) goes through the ring: after START the body waits on the green ring, **lifeless** (dark grey, P2's arm hanging), and each person's shadow shows where they are, **P1 grey, P2 orange**. Walk your shadow onto the ring: the parts you drive **light up** as you arrive (P1: torso, head and P1's limbs; P2: P2's limbs, the arm pulled up on its strings). Both on the ring for a moment and it begins. **Start now** (P1) skips it.
 - **Without a measured floor,** each person's spot is 2.8 m in front of their camera, centred; in one shared space the two spots are 90 cm apart.

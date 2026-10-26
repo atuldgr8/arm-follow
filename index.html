@@ -183,13 +183,14 @@
       <div id="centre"><div class="big">Walk onto the green ring</div><div class="small">your shadow: P1 grey, P2 orange · the body wakes up as you arrive</div><div class="small" id="centre-who"></div><button id="centre-go" style="margin-top:8px;font:12px var(--mono);border:1px solid var(--edge);border-radius:8px;padding:6px 12px;background:var(--card);cursor:pointer;pointer-events:auto">Start now</button></div>
       <div id="flow">
         <div class="ftitle" style="display:flex;align-items:center">Getting ready<button id="f-fold" title="Fold this card away (the stats and the scene behind it show again)" style="margin-left:auto;padding:2px 9px;font-size:13px;line-height:1">–</button></div>
-        <div class="fstep" id="fs1"><div class="fnum"></div><div class="fbody"><div class="fh">Measure your floor</div><div class="fsub" id="fs1-text"></div><div class="fbtns"><button class="pri" id="f-cal">Calibrate</button><button id="f-draw" title="Click the floor’s corners on the camera picture instead of walking to its edges">Draw it</button><button id="f-skip">Skip</button><button id="f-again">Measure again</button></div><div class="fsub dim" id="fs1-other"></div></div></div>
+        <div class="fstep" id="fs1"><div class="fnum"></div><div class="fbody"><div class="fh">Measure your floor</div><div class="fsub" id="fs1-text"></div><div class="fbtns"><button class="pri" id="f-cal">Calibrate</button><button id="f-draw" title="Click the floor’s corners on the camera picture instead of walking to its edges">Draw it</button><button id="f-skip">Use saved floor</button><button id="f-again">Measure again</button></div><div class="fsub dim" id="fs1-other"></div></div></div>
         <div class="fstep" id="fs2"><div class="fnum"></div><div class="fbody"><div class="fh">Two rooms of different sizes</div><div class="fsub" id="fs2-text"></div><div class="seg"><button id="f-mapped">Map onto each other</button><button id="f-smaller">Use the smaller room</button></div><div class="fsub dim" id="fs2-note"></div></div></div>
         <div class="fstep" id="fs3"><div class="fnum"></div><div class="fbody"><div class="fh">Step into the camera</div><div class="fsub" id="fs3-text"></div></div></div>
         <button id="f-start">START</button>
         <div class="fsub dim center" id="f-start-note"></div>
         <div id="f-wait">Waiting for P1 to press START…</div>
       </div>
+      <div id="countdown" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:7;font-size:clamp(90px,16vw,220px);font-weight:500;color:var(--ink);text-shadow:0 0 40px #fff"><span></span></div>
       <div id="calib"><div class="big" id="calib-big">MEASURING YOUR FLOOR</div><div class="small" id="calib-text"></div><div class="gbar"><div id="calib-g"></div></div></div>
       <div id="fdraw">
         <div id="fd-top"><div class="fh">Draw your floor</div><div id="fd-cue" class="fcue"></div><div id="fd-cuesub" class="fsub"></div><div class="fdbar"><div id="fd-bar"></div></div></div>
@@ -419,7 +420,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.26 · 27 Oct 02:10'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.27 · 27 Oct 02:40'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'floordraw.js', 'scene.js', 'bubbles.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

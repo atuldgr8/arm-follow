@@ -73,7 +73,7 @@ function composeAvatar(dt) {
   let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(walk.x, walk.z);   // your real floor position, in the room (floor.js); arms only: stays put
   vp = reachHold(vp);
   if (SET.solid && !SET.armsOnly && !isBubbles()) vp = solidPush(vp);
-  if (typeof RUN !== 'undefined' && RUN.phase === 'centre') { let R = ringPos(); vp = { x: R.x, z: R.z }; }   // waiting on the ring for both of you
+  if (typeof RUN !== 'undefined' && (RUN.phase === 'centre' || RUN.phase === 'countdown')) { let R = ringPos(); vp = { x: R.x, z: R.z }; }   // waiting on the ring for both of you
   if (BODY.fallen || BODY.k > 0.01) vp = BODY.at || vp; else BODY.at = { x: vp.x, z: vp.z };   // down: it stays where it fell
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
@@ -814,7 +814,7 @@ function hudSnap() {
 const onRing = k => { let c = typeof RUN !== 'undefined' && RUN.centre; return !!c && c['d' + k] !== null && c['d' + k] !== undefined && c['d' + k] < RING_OK; };
 // the walk to the centre: the ring everyone walks onto (the middle of the room), and where P2 is
 function centreSnap() {
-  if (typeof RUN === 'undefined' || RUN.phase !== 'centre') return null;
+  if (typeof RUN === 'undefined' || (RUN.phase !== 'centre' && RUN.phase !== 'countdown')) return null;
   let p1 = inRoom(1), p2 = inRoom(2), c = RUN.centre || {}, R = ringPos();
   return { ring: [R.x, R.z], p1: p1 ? [r3(p1.x), r3(p1.z)] : null, p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: onRing(1), ok2: onRing(2) };
 }

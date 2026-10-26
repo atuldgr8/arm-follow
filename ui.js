@@ -151,7 +151,7 @@ function pipStep() {
         x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 11px monospace';
         x.fillText('The floor can’t be placed on this picture: measure it walking toward/away from the camera, or draw it', 8, h - 26); x.restore();
       }
-      let c = centreOf(my), cp = c && RUN.phase === 'centre' ? floorToPicture(src, c.x, c.z) : null;
+      let c = centreOf(my), cp = c && (RUN.phase === 'centre' || RUN.phase === 'countdown') ? floorToPicture(src, c.x, c.z) : null;
       if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
     }
     // locked on, but the locked person wasn't matched just now
@@ -385,7 +385,7 @@ function setupPanel() {
   $('f-draw').onclick = fdOpen; $('btn-draw').onclick = fdOpen; $('floorfrom').onchange = e => useFloorFrom(e.target.value); fdSetup();
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
   $('f-start').onclick = startRun;
-  $('centre-go').onclick = () => { if (!isGuest() && RUN.phase === 'centre') { logEvent('flow', { centre: 'skipped' }); beginPlay(); } }; $('btn-setup').onclick = backToSetup;
+  $('centre-go').onclick = () => { if (!isGuest() && RUN.phase === 'centre') { logEvent('flow', { centre: 'skipped' }); RUN.phase = 'countdown'; RUN.countEnd = performance.now() + 3000; } }; $('btn-setup').onclick = backToSetup;
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
@@ -491,7 +491,7 @@ function startRun() {
   else beginPlay();
   updatePanel();
 }
-function beginPlay() { RUN.phase = 'play'; RUN.centre = null; restartWorld(); logEvent('flow', { to: 'play' }); toast('Go!'); updatePanel(); }
+function beginPlay(counted) { RUN.phase = 'play'; RUN.centre = null; restartWorld(); if (counted && typeof BUB !== 'undefined') BUB.skipCount = true; logEvent('flow', { to: 'play' }); toast('Go!'); updatePanel(); }
 function backToSetup() {
   if (isGuest()) { toast('P1’s laptop decides this'); return; }
   unlockPeople(); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; RUN.centre = null; logEvent('flow', { to: 'setup' }); updatePanel();
@@ -513,11 +513,21 @@ function centreStep(dt) {
   let now = performance.now();
   if (!(there(1) && there(2))) RUN.centreSince = 0; else if (!RUN.centreSince) RUN.centreSince = now;
   RUN.centreT = RUN.centreSince ? (now - RUN.centreSince) / 1000 : 0;
-  if (RUN.centreT > 0.8) beginPlay();
+  if (RUN.centreT > 0.8) { RUN.phase = 'countdown'; RUN.countEnd = now + 3000; logEvent('flow', { to: 'countdown' }); }
+}
+// 3-2-1 on both screens, then the game
+function countdownStep() {
+  if (RUN.phase !== 'countdown' || isGuest()) return;
+  let left = (RUN.countEnd - performance.now()) / 1000;
+  RUN.centre = Object.assign({}, RUN.centre, { cnt: Math.max(1, Math.ceil(left)) });
+  if (left <= 0) beginPlay(true);
 }
 function flowStep() {
   let cam = SET.source === 'mediapipe';
   let showCard = cam && RUN.phase === 'setup', showCentre = RUN.phase === 'centre';
+  // the big countdown (both screens)
+  let cd = $('countdown'), cnt = RUN.phase === 'countdown' && RUN.centre && RUN.centre.cnt;
+  cd.style.display = cnt ? 'flex' : 'none'; if (cnt && cd.firstChild.textContent !== String(cnt)) { cd.firstChild.textContent = String(cnt); if (typeof sndBeep === 'function') sndBeep(520, 0.12); }
   $('flow').style.display = showCard ? 'block' : 'none';
   $('centre').style.display = showCentre ? 'block' : 'none';
   $('waiting').style.visibility = showCard ? 'hidden' : 'visible';
@@ -532,13 +542,14 @@ function flowStep() {
   let done1 = calStepDone(), t1;
   if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>raise both hands above your head for a second</b>, or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
     + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
-  else if (CAL.rect) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
-  else if (CAL.skipped) t1 = '✓ Skipped: the walk-gain sliders are used instead.';
+  else if (done1) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
+  else if (CAL.rect) t1 = 'A floor is saved on this laptop. Use it, or measure again if anything moved (Calibrate walks it; Draw it on the camera).';
   else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then raise both hands above your head (or press Done). Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
   $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
   $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';
-  $('f-skip').style.display = !CAL.active && !done1 ? '' : 'none';
+  $('f-skip').style.display = !CAL.active && !done1 && CAL.rect ? '' : 'none';
+  $('f-skip').textContent = 'Use saved floor' + (CAL.rect ? ' (' + fmt(CAL.rect) + (CAL.rect.drawn ? ', drawn' : '') + ')' : '');
   $('f-draw').style.display = !CAL.active ? '' : 'none';
   $('f-again').style.display = !CAL.active && done1 ? '' : 'none';
   $('fs1').classList.toggle('done', done1);
@@ -564,9 +575,12 @@ function flowStep() {
     (!guest && SET.spaces === 2 && SET.comp === 'off' && !SET.solo ? ' · <span class="' + (p2ok ? 'ok' : 'wait') + '">' + (p2ok ? '✓ P2 found' : linked ? 'P2 not found yet' : 'P2 not linked yet') + '</span>' : '') + feetNote();
   $('fs3').classList.toggle('done', seen.length === mineSlots.length && p2ok);
   // START
-  let ready = done1 && seen.length === mineSlots.length && p2ok && (!linked || NET.otherDone || !!CAL.other);
+  let ready = done1 && seen.length === mineSlots.length && p2ok && (!linked || NET.otherDone);
   $('f-start').style.display = guest ? 'none' : ''; $('f-wait').style.display = guest ? '' : 'none';
   $('f-start').disabled = !ready;
+  // ready (both floors and both people) for a second: on to the ring by itself
+  if (ready && !guest && RUN.phase === 'setup') { RUN.readySince = RUN.readySince || performance.now(); if (performance.now() - RUN.readySince > 1000) { RUN.readySince = 0; startRun(); } }
+  else RUN.readySince = 0;
   $('f-start-note').textContent = guest ? '' : ready ? (needsCentre() ? 'After START, both walk onto the ring in the room; it begins once you’re both there.' : '') : 'START unlocks once every step above is done.';
 }
 
@@ -623,7 +637,7 @@ function frame(now) {
   if (isGuest()) S = guestSnap(dt);
   else { simStep(dt, now); S = SNAP; }
   sceneRender(S, dt);
-  centreStep(dt); hudStep(S); statsStep(S); pipStep(); flowStep(); fdTick(); logTick(now, S);
+  centreStep(dt); countdownStep(); hudStep(S); statsStep(S); pipStep(); flowStep(); fdTick(); logTick(now, S);
 }
 sceneInit($('stage'));
 try { let t = localStorage.getItem('armfollow.tracker'), a = localStorage.getItem('armfollow.phoneIP'); if (t) SET.tracker = t; if (a) SET.phoneIP = a; } catch (e) {}

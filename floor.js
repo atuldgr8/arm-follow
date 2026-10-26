@@ -35,13 +35,14 @@ function calibrate() {
   try { localStorage.setItem('armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
   CAL.walked = CAL.rect; SET.floorFrom = 'walked';   // walking it switches back to the walked floor (floordraw.js keeps the drawn one)
   try { localStorage.setItem('armfollow.floorFrom', 'walked'); } catch (e) {}
+  CAL.confirmed = true;
   logEvent('calibrate', { w: +rectW(r).toFixed(2), d: +rectD(r).toFixed(2) });
   toast('Floor: ' + rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m');
   if (!isGuest() && RUN.phase === 'play') restartWorld();
   updatePanel();
 }
 // skip measuring: keep the saved floor if there is one, else use the sliders
-function skipFloor() { CAL.active = false; CAL.skipped = true; updatePanel(); }
+function skipFloor() { if (!CAL.rect) return; CAL.active = false; CAL.skipped = true; CAL.confirmed = true; updatePanel(); }
 function forgetFloor() {
   CAL.rect = null; CAL.active = false; CAL.skipped = false;
   // forgets the floor in use (walked or drawn)
@@ -96,7 +97,9 @@ function floorToPicture(r, x, z) {
   let tanH = Math.tan(SET.fov * Math.PI / 360), lat = x * (SET.mirror ? -1 : 1);
   return { x: 0.5 + lat / (2 * z * tanH), y: r.fa + r.fb / z };
 }
-function calStepDone() { return !CAL.active && (!!CAL.rect || CAL.skipped); }
+// the floor step is done once this session has a floor: measured now (walked or drawn), or the saved one
+// chosen with "Use saved floor". There's no going on without a floor.
+function calStepDone() { return !CAL.active && !!CAL.rect && !!CAL.confirmed; }
 
 // the walk to the centre before it begins: each person's centre is the middle of the floor they use
 // each person's spot to walk to before it begins: the middle of the floor they use; with no measured floor,

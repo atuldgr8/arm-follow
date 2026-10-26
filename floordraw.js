@@ -112,7 +112,7 @@ function fdUse() {
   if (rectW(rect) < 0.5 || rectD(rect) < 0.5) { toast('Too small (under 50 cm one way): floor not changed'); return; }
   // where the floor sits in the picture, for the feet (a typed depth rescales distances too)
   if (e.fit) { rect.fa = e.fit.a; rect.fb = e.fit.b * kz; }
-  CAL.drawn = rect; CAL.rect = rect; SET.floorFrom = 'drawn'; CAL.skipped = false;
+  CAL.drawn = rect; CAL.rect = rect; SET.floorFrom = 'drawn'; CAL.skipped = false; CAL.confirmed = true;
   try { localStorage.setItem('armfollow.floorDrawn', JSON.stringify(rect)); localStorage.setItem('armfollow.floorFrom', 'drawn'); } catch (x) {}
   logEvent('draw floor', { w: r3(rectW(rect)), d: r3(rectD(rect)), from: e.how, measured: !!rect.real });
   toast('Floor: ' + rectW(rect).toFixed(1) + ' × ' + rectD(rect).toFixed(1) + ' m (drawn)');
