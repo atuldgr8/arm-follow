@@ -131,8 +131,16 @@ function pipStep() {
       x.save(); x.translate(clamp(lab.x * w, 90, w - 90), Math.min(h - 4, lab.y * h + 12)); if (SET.mirror) x.scale(-1, 1); x.fillStyle = col; x.font = 'bold 10px monospace'; x.textAlign = 'center'; x.fillText(label, 0, 0); x.restore();
     };
     if (CAL.active) {
-      let lv = CAL.live && CAL.live.x0 !== undefined ? onPic(CAL.live) : null;
-      if (lv) outline(lv, 'rgba(255,176,32,0.95)', [2, 5], 2, 'MEASURING');
+      // WALKING IT: the floor drawn live as you go. Once you've walked toward and away from the camera, it's the
+      // measured floor itself (in perspective); before that, the outline of everywhere your feet have been.
+      let fit = fitFloor(CAL.samples), lv = null;
+      if (fit && CAL.live && CAL.live.x0 !== undefined) { let keep = src; src = { fa: fit.a, fb: fit.b }; lv = onPic(CAL.live); src = keep; }
+      if (lv) outline(lv, 'rgba(255,176,32,1)', [], 3, 'YOUR FLOOR · ' + rectW(CAL.live).toFixed(1) + ' × ' + rectD(CAL.live).toFixed(1) + ' m', 'rgba(255,176,32,0.16)');
+      else if (CAL.pic && CAL.pic.length > 2) {
+        let H = hull2(CAL.pic).map(([u, v]) => ({ x: u, y: v }));
+        if (H.length > 2) outline(H, 'rgba(255,176,32,1)', [6, 5], 3, 'WHERE YOU’VE WALKED · now go toward and away from the camera', 'rgba(255,176,32,0.12)');
+      }
+      if (CAL.pic) { x.fillStyle = 'rgba(255,176,32,0.5)'; for (let i = Math.max(0, CAL.pic.length - 300); i < CAL.pic.length; i += 3) { let q = CAL.pic[i]; x.fillRect(q[0] * w - 1, q[1] * h - 1, 2, 2); } }
     } else if (mine && !phoneOn()) {
       // rooms of different sizes, both using the smaller one: your whole floor faint, the patch you play in bold
       let use = usable(my), smaller = use && use !== mine && (rectW(use) < rectW(mine) - 0.02 || rectD(use) < rectD(mine) - 0.02);
@@ -197,6 +205,14 @@ function pipStep() {
   x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands' + (MP.fromPhone && PHONE.cam && PHONE.cam.held ? ' · phone ' + PHONE.cam.held : '') + ' · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
 }
 
+// the outline around a set of points (convex hull, monotone chain)
+function hull2(P) {
+  let pts = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  let lo = [], up = [];
+  for (let p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = pts.length - 1; i >= 0; i--) { let p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
 // DRAG THE SMALLER ROOM'S PATCH in the camera view (rooms of different sizes, both using the smaller one):
 // grab the bold PLAY HERE patch and move it anywhere on your floor. It's kept with your floor (and sent
 // to the other laptop with it), so a deep room can put it where the camera sees you best.
@@ -383,7 +399,7 @@ function setupPanel() {
     if (!P) return;
     SET.own = P[0]; SET.legSplit = P[1]; if (P[2]) SET.legP2 = P[2]; LEGS.init = false; ownershipChanged(); updatePanel();
   };
-  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; ownershipChanged(); }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
+  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; ownershipChanged(); }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift'); tog('btn-bubxray', 'bubXray');
   tog('btn-sound', 'sound', () => { if (SET.sound) snd(); });
   sl('bubn', 'bubbleN', v => Math.round(v) + ' bubbles'); sl('bubt', 'roundS', v => v + ' s'); sl('jthr', 'jumpThr', v => Math.round(v * 100) + ' cm');
   $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
@@ -418,7 +434,7 @@ function updatePanel() {
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   // Bubble Pop
   set('btn-bubfollow', 'Follow rule (the arm falls off if you walk apart): ', SET.bubFollow); set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
-  set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-sound', 'Sound on this laptop: ', SET.sound);
+  set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-bubxray', 'See-through body: ', SET.bubXray); set('btn-sound', 'Sound on this laptop: ', SET.sound);
   cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-bodyfall', SET.legSplit);
   $('bodyfall').value = SET.bodyFall;
   { let sp = 'custom', o = SET.own, L = SET.legSplit, g = SET.legP2;
@@ -552,6 +568,7 @@ function flowStep() {
 function toggleArms() {
   if (isGuest()) { toast('P1’s laptop decides this'); return; }
   SET.armsOnly = !SET.armsOnly;
+  if (SET.game === 'bubbles') bubblesReset();   // Bubble Pop: a new layout (within reach in Arms only)
   if (SET.armsOnly) { RUN.phase = 'play'; if (SET.view === 'behind') setView('behind'); toast('Arms only: just your arms · A to leave'); }
   else { toast('Arms only off'); restartWorld(); }
   updatePanel();

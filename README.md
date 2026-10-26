@@ -7,7 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.23 (26 Oct): the split body falls; every split
+## v1.24 (27 Oct): Arms only in Bubble Pop, a see-through body, the floor drawn live while you walk it
+
+- **Arms only in Bubble Pop:** the body stands still and every bubble is a hands one, within reach: spread across the front of the body from the waist to just overhead. Same count and clock. (Before, Arms only switched Bubble Pop off.)
+- **See-through body** (Game section, on): in Bubble Pop the body is see-through and the arms a little, so bubbles behind it show in the view from behind.
+- **Walking to calibrate draws the floor live** in the camera view again: first the outline of everywhere your feet have been (with a trail of dots), then, once you've walked toward and away from the camera, the measured floor itself in perspective, with its size. Drawing the floor (T-pose or clicking corners) is still there as the other way.
+: the split body falls; every split
 
 - **Split** (Who owns what): quick picks for who drives which limb: P2's right arm, left arm or both arms; P2's right half or left half (arm + leg); or criss-cross (P2's right arm + left leg, or left arm + right leg). Custom still sets arm by arm. The leg settings moved here from the Game section, and **split legs now work in carrying the cube too** (the hurdle walk: the body walks only when both step the same way). Jumping is still Bubble Pop's.
 - **The split body falls:** with the legs split, walking apart past the drift tolerance brings the **whole body** down, not just the arm. **Walk apart and the body**: collapses on the spot (knees give, it sinks and slumps forward), tips over P2's side, or stays up (only the arm falls). Down, it can't walk, hold or pop. **Both of you raise both hands above your heads** for a moment and it stands up again, with the drift starting from zero. Demo people and the computer partner get up by themselves after 3 s. The label and prompt say what to do. The log records each fall and how long it stayed down.

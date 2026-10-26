@@ -25,7 +25,8 @@ const SET = {
   jumpThr: 0.07,         // a hop counts once hips and shoulders rise this far together (m)
   sound: true,           // pops, landings and the timer, on this laptop
   bodyFall: 'whole',     // legs split, walking apart: the whole body falls. 'whole' (collapses on the spot) | 'side' (tips over P2's side) | 'off'
-  bubFollow: true,       // Bubble Pop: the follow rule as in carrying the cube (walk apart and P2's arm falls off; a lifeless hand can't pop)
+  bubFollow: true,
+  bubXray: true,         // Bubble Pop: the body is see-through (arms a little less), so you can see bubbles behind it       // Bubble Pop: the follow rule as in carrying the cube (walk apart and P2's arm falls off; a lifeless hand can't pop)
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)

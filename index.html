@@ -223,6 +223,7 @@
           <div class="cond" id="g-shonly" data-why="Shared-jump bubbles · needs the legs split and jumping together">
           <button class="sw world" id="btn-shonly" title="About half the high bubbles (gold) are too high for a single jump: only jumping together reaches them. Takes effect from the next round."></button>
           </div>
+          <button class="sw world" id="btn-bubxray" title="The body turns see-through (the arms a little less), so you can see bubbles behind it in the view from behind."></button>
           <button class="sw world" id="btn-drift" title="The bubbles drift slowly while the round is on (harder)."></button>
           <div class="f"><label>A hop counts from<span class="tip" title="How far your hips and shoulders must rise together, quickly, to count as a jump. Lower = more sensitive. The camera view shows a meter beside your hips with this as its tick.">ⓘ</span><span class="val" id="val-jthr"></span></label><input type="range" id="jthr" class="world" min="0.03" max="0.15" step="0.005"></div>
           <button class="sw" id="btn-sound" title="Pops, landings and the timer, on this laptop"></button>
@@ -417,7 +418,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.23 · 26 Oct 23:15'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.24 · 27 Oct 00:55'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'floordraw.js', 'scene.js', 'bubbles.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

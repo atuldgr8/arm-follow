@@ -24,7 +24,7 @@ const BUB_R = { low: 0.17, mid: 0.15, high: 0.15 };
 const BUB_COL = { low: 0x12c46a, mid: 0x1e90ff, high: 0xa855f7, shared: 0xffb000 };
 const JUMP_H = 0.35, HOP_H = 0.18;   // the body's jump (virtual metres); a shared jump is twice JUMP_H
 
-const isBubbles = () => SET.game === 'bubbles' && !SET.armsOnly;
+const isBubbles = () => SET.game === 'bubbles';   // Arms only too: then the bubbles are all within reach of the standing body
 // who owns each leg: P1, unless the legs are split (then P2 gets SET.legP2)
 function legOwner(s) { return SET.legSplit && !SET.armsOnly ? (s === SET.legP2 ? 2 : 1) : 1; }
 // the delay between the two laptops (ms): half the round trip, plus how often updates are sent
@@ -126,7 +126,26 @@ function bubbleSpot() {
 }
 // a round's layout: a quarter low, a quarter high, the rest in reach. Heights come from the body's own
 // shoulders and reach, so nothing is out of range (high ones: just past standing reach, under a jump's)
+// ARMS ONLY: the body stands still, so every bubble is a hands one, within reach: spread across the front
+// of the body from waist to just overhead, 40–55 cm out from the chest
+function bubbleLayoutArms() {
+  let n = Math.max(3, Math.round(SET.bubbleN)), out = [];
+  let shY = AV.ok ? (AV.j.shL.y + AV.j.shR.y) / 2 : 1.42, pelY = AV.ok ? AV.j.pelvis.y : 0.95, cx = AV.ok ? (AV.j.shL.x + AV.j.shR.x) / 2 : START.x, cz = AV.ok ? (AV.j.shL.z + AV.j.shR.z) / 2 : START.z;
+  for (let i = 0; i < n; i++) {
+    let best = null, bd = -1;
+    for (let t = 0; t < 60; t++) {
+      let a = rand(-1.0, 1.0), dist = rand(0.5, 0.62), y = rand(pelY + 0.2, shY + 0.3);
+      let c = { x: cx + Math.sin(a) * dist, y, z: cz - Math.cos(a) * dist };
+      let dmin = out.reduce((m, q) => Math.min(m, Math.hypot(q.x - c.x, q.y - c.y, q.z - c.z)), 9);
+      if (dmin > 0.26) { best = c; break; }
+      if (dmin > bd) { bd = dmin; best = c; }
+    }
+    out.push({ kind: 'mid', ns: false, x: best.x, y: best.y, z: best.z, r: 0.1 });
+  }
+  return out;
+}
 function bubbleLayout() {
+  if (SET.armsOnly) return bubbleLayoutArms();
   let n = Math.max(3, Math.round(SET.bubbleN)), nLow = Math.max(1, Math.round(n / 4)), nHigh = Math.max(1, Math.round(n / 4)), nMid = Math.max(1, n - nLow - nHigh);
   let kinds = [...Array(nLow).fill('low'), ...Array(nMid).fill('mid'), ...Array(nHigh).fill('high')];
   for (let i = kinds.length - 1; i > 0; i--) { let k = Math.floor(Math.random() * (i + 1)); [kinds[i], kinds[k]] = [kinds[k], kinds[i]]; }
@@ -228,7 +247,7 @@ function bubbleHint(now) {
 // one frame of the game (host), after the body and the arms (sim.js)
 function bubbleStep(dt, now) {
   BUB.w = clapWindow();
-  jumpTick(now); jumpPhysics(dt);
+  if (!SET.armsOnly) { jumpTick(now); jumpPhysics(dt); }
   if (BUB.needLayout && AV.ok) { BUB.needLayout = false; bubbleRound(false); }
   for (let b of BUB.list) { b.touch = 0; }
   BUB.pops = BUB.pops.filter(p => now - p.t < 900);
@@ -291,11 +310,12 @@ function demoBubbles(now, dt, which) {
   if (A.tgt && AV.ok) {
     // steer by where the BODY is (with the legs split it lags behind P1), toward where it should stand
     let b = A.tgt, sz = b.kind === 'mid' ? 0.35 : b.kind === 'high' ? 0.15 : 0, gx = b.c.x - AV.root.x, gz = b.c.z + sz - AV.root.z, d = Math.hypot(gx, gz);
+    if (A.phase === 'walk' && SET.armsOnly) { A.phase = 'reach'; A.t = 0; }
     if (A.phase === 'walk') {
       if (d > 0.06) { let g = effGain(), step = 0.55 * dt; A.x += gx / d * Math.min(step, d / g); A.z += gz / d * Math.min(step, d / g); moving = 1; }
       else { A.phase = 'reach'; A.t = 0; }
     } else {
-      if (d > 0.25) { A.phase = 'walk'; A.t = 0; }
+      if (d > 0.25 && !SET.armsOnly) { A.phase = 'walk'; A.t = 0; }
       if (b.kind !== 'low') hands = bubbleHands(b, Math.min(1, A.t / 0.7));
       if (b.kind === 'high' && A.t > 0.6) { let u = (A.t - 0.6) % 1.5; if (u < 0.45) A.lift = 0.22 * Math.sin(Math.PI * u / 0.45); }
     }
@@ -348,7 +368,7 @@ function bubbleBurst(p) {
     let d = new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(0.8, 2.2)); d.y += 0.6; vel.push(d);
   }
   let g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  let pts = new THREE.Points(g, new THREE.PointsMaterial({ color: col, size: 0.045, transparent: true, opacity: 1, depthWrite: false }));
+  let pts = new THREE.Points(g, new THREE.PointsMaterial({ color: col, size: SET.armsOnly ? 0.014 : 0.045, transparent: true, opacity: 1, depthWrite: false }));
   let ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
   ring.position.set(x, y, z); pts.frustumCulled = false;
   SC.scene.add(pts); SC.scene.add(ring);
@@ -366,8 +386,10 @@ function bubbleRender(S, dt) {
       it.m.visible = true; it.m.position.set(x, y + (k ? 0.03 * Math.sin(t * 1.3 + id * 1.7) : 0), z); it.m.scale.set(r * wob, r * (2 - wob), r * wob);
       it.mat.color.setHex(col); it.mat.emissive.setHex(col); it.mat.emissiveIntensity = touch ? 0.65 : 0.18; it.mat.opacity = touch ? 0.62 : 0.42;
       let s = r * 2.6 * (1 + y * 0.15);
+      if (!S.armsOnly) {
       it.sh.visible = true; it.sh.position.set(x, 0.006, z); it.sh.scale.set(s, s, 1); it.sh.material.opacity = clamp(0.6 - y * 0.12, 0.15, 0.6);
       it.ring.visible = true; it.ring.position.set(x, 0.008, z); it.ring.scale.setScalar(r * (k === 3 ? 1.35 : 1.15) * (touch ? 1.15 : 1)); it.ring.material.color.setHex(col);
+      }
       if (k >= 2) {
         let a = it.stem.geometry.attributes.position; a.setXYZ(0, x, y - r, z); a.setXYZ(1, x, 0.01, z); a.needsUpdate = true;
         it.stem.computeLineDistances(); it.stem.material.color.setHex(col); it.stem.visible = true;
@@ -392,7 +414,7 @@ function bubbleRender(S, dt) {
     let a = b.pts.geometry.attributes.position;
     b.vel.forEach((v, i) => { v.y -= 6 * dt; a.setXYZ(i, a.getX(i) + v.x * dt, Math.max(0.01, a.getY(i) + v.y * dt), a.getZ(i) + v.z * dt); });
     a.needsUpdate = true; b.pts.material.opacity = 1 - b.t / 0.8;
-    b.ring.scale.setScalar(0.12 + b.t * 0.8); b.ring.lookAt(SC.camera.position); b.ring.material.opacity = Math.max(0, 0.9 * (1 - b.t / 0.5));
+    b.ring.scale.setScalar((0.12 + b.t * 0.8) * (SET.armsOnly ? 0.4 : 1)); b.ring.lookAt(SC.camera.position); b.ring.material.opacity = Math.max(0, 0.9 * (1 - b.t / 0.5));
     return true;
   });
 }
@@ -432,7 +454,8 @@ function sndWhoosh() { noiseHit(0.35, 900, 0.6, 0.35); tone(300, 700, 0.3, 'sine
 // =====================================================================
 // HUD, camera view and stats (every laptop)
 // =====================================================================
-const isBubblesLocal = () => SET.game === 'bubbles' && !SET.armsOnly;
+const isBubblesLocal = () => SET.game === 'bubbles';
+const feetMatter = () => isBubblesLocal() && !SET.armsOnly;   // Arms only: no feet, no jumping
 // are this person's feet in the picture? (null: no picture to tell from)
 function feetSeenOf(p) {
   let lm = p && (p.lmS || p.lm); if (!lm || !lm[27] || !lm[28]) return null;
@@ -440,21 +463,21 @@ function feetSeenOf(p) {
 }
 // THE FRAME CHECK: feet and jumping need head to toe in the picture
 function feetText() {
-  if (!isBubblesLocal() || SET.source !== 'mediapipe') return '';
+  if (!feetMatter() || SET.source !== 'mediapipe') return '';
   let slots = calSlots(), out = [];
   for (let k of slots) { if (feetSeenOf(live(k)) === false) out.push((slots.length > 1 ? 'P' + k + ': ' : '') + 'step back · your feet are out of the picture'); }
   return out.join(' · ');
 }
 // for the getting-ready card (step 3)
 function feetNote() {
-  if (!isBubblesLocal() || SET.source !== 'mediapipe') return '';
+  if (!feetMatter() || SET.source !== 'mediapipe') return '';
   let seen = calSlots().map(k => feetSeenOf(live(k))).filter(f => f !== null);
   if (!seen.length) return '';
   return seen.every(f => f) ? '<br><span class="ok">✓ Feet in the picture</span>' : '<br><span class="wait">Bubble Pop needs your feet: step back until they’re in the picture</span>';
 }
 // each laptop watches its own people's jumps too, for the marker in its camera view
 function bubbleLocalTick(now) {
-  if (!isBubblesLocal()) return;
+  if (!feetMatter()) return;
   for (let k of calSlots()) jumpSense(live(k), now);
 }
 const fmtT = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -468,7 +491,7 @@ function bubbleHud(S) {
   tEl.style.display = play ? 'block' : 'none'; tEl.textContent = fmtT(B.tl); tEl.classList.toggle('low', B.ph === 'play' && B.tl < 10);
   let msg = null;
   if (play) {
-    if (B.ph === 'count') msg = [String(Math.max(1, B.cnt)), 'pop all ' + B.tot + ' · two hands each · two feet for the low ones · jump for the high ones'];
+    if (B.ph === 'count') msg = [String(Math.max(1, B.cnt)), 'pop all ' + B.tot + ' · two hands each' + (SET.armsOnly ? '' : ' · two feet for the low ones · jump for the high ones')];
     else if (B.ph === 'play' && B.go > 0) msg = ['GO!', ''];
     else if (B.ph === 'clear') msg = ['CLEARED', 'in ' + fmtT(B.used) + ' · next round in ' + B.endT];
     else if (B.ph === 'over') msg = ['TIME’S UP', B.popped + ' of ' + B.tot + ' popped · again in ' + B.endT];
@@ -483,7 +506,7 @@ function bubbleHud(S) {
 // in the camera view (drawn in the picture's own, possibly mirrored, space): the ankles (green seen,
 // red not), a jump meter beside the hips (the tick is where a hop counts), and JUMP! when one fires
 function bubblePipMarks(x, w, h) {
-  if (!isBubblesLocal()) return;
+  if (!feetMatter()) return;
   let now = performance.now(), say = (txt, px, py, col) => { x.save(); x.translate(px, py); if (SET.mirror) x.scale(-1, 1); x.fillStyle = col; x.font = 'bold 15px monospace'; x.textAlign = 'center'; x.fillText(txt, 0, 0); x.restore(); };
   for (let k of calSlots()) {
     let p = live(k), lm = p && (p.lmS || p.lm); if (!lm || !lm[23] || !lm[24]) continue;
@@ -501,7 +524,7 @@ function bubblePipMarks(x, w, h) {
 }
 // around the whole camera view: green when your feet are in, red and dashed when not; and the clap window
 function bubblePipFrame(x, w, h) {
-  if (!isBubblesLocal() || SET.source !== 'mediapipe') return;
+  if (!feetMatter() || SET.source !== 'mediapipe') return;
   let ok = !feetText(), col = ok ? 'rgba(48,209,88,0.9)' : 'rgba(229,55,42,0.95)';
   x.strokeStyle = col; x.lineWidth = 4; x.setLineDash(ok ? [] : [10, 6]); x.strokeRect(2, 2, w - 4, h - 4); x.setLineDash([]);
   x.fillStyle = col; x.font = 'bold 11px monospace'; x.textAlign = 'right';

@@ -180,6 +180,8 @@ function sceneRender(S, dt) {
     let alive = A.owner === 2 ? COL.p2 : COL.body;
     G.col.set(COL.dead).lerp(new THREE.Color(alive), clamp(A.life, 0, 1));
     G.m.color.copy(G.col);
+    let ao = S.bub && SET.bubXray && !S.armsOnly ? 0.75 : 1;   // Bubble Pop: see-through arms (a little)
+    if (G.m.opacity !== ao) { G.m.opacity = ao; G.m.transparent = ao < 1; G.m.depthWrite = ao >= 1; G.m.needsUpdate = true; }
 
     ball(G.sh, pts[0], 0.062); seg(G.upper, pts[0], pts[1], 0.05); ball(G.elbow, pts[1], 0.05);
     seg(G.fore, pts[1], pts[2], 0.042); ball(G.wrist, pts[2], 0.036);
@@ -241,6 +243,7 @@ function sceneRender(S, dt) {
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid
   // and while the view cuts to first person, the body fades so the camera doesn't pass through a solid torso
   let fade = Math.min(SET.xray ? 1 - 0.7 * smooth01(SC.exam) : 1, 1 - 0.65 * clamp(SC.fp * 4, 0, 1)), bm = SC.parts.bodyMat;
+  if (S.bub && SET.bubXray && !S.armsOnly) fade = Math.min(fade, 0.3);   // Bubble Pop: see the bubbles through the body
   for (let m of [bm, SC.parts.legMat.L, SC.parts.legMat.R]) {
     if (Math.abs(m.opacity - fade) > 0.005) { m.opacity = fade; let t = fade < 0.99; if (m.transparent !== t) { m.transparent = t; m.depthWrite = !t; m.needsUpdate = true; } }
   }

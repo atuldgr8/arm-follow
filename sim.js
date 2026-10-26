@@ -78,7 +78,7 @@ function composeAvatar(dt) {
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
   AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), shL: W(rel('shL')), shR: W(rel('shR')),
     hipL: W(legs.L.hip), knL: W(legs.L.kn), anL: W(legs.L.an), hipR: W(legs.R.hip), knR: W(legs.R.kn), anR: W(legs.R.an) };
-  if (isBubbles()) jumpLift(AV.j);   // Bubble Pop: the jump lifts the body (a lopsided hop, only one side)
+  if (isBubbles() && !SET.armsOnly) jumpLift(AV.j);   // Bubble Pop: the jump lifts the body (a lopsided hop, only one side)
   bodyPose(dt);                      // a split body that fell: collapsed, or tipped over P2's side
   let F = torsoFrame(j);
   AV.frame = { X: unturn(F.X), Y: unturn(F.Y), Z: unturn(F.Z) };
@@ -763,9 +763,8 @@ function simStep(dt, now) {
   if (AV.ok) {
     followStep();
     for (let s of ['L', 'R']) { armStep(ARMS[s], dt, now); }
-    if (SET.armsOnly) {}
-    else if (isBubbles()) { if (CUBE.held) dropCube('Bubble Pop'); bubbleStep(dt, now); }
-    else { gripStep(dt); palmsOnSurface(); taskStep(dt); }
+    if (isBubbles()) { if (CUBE.held) dropCube('Bubble Pop'); bubbleStep(dt, now); }
+    else if (!SET.armsOnly) { gripStep(dt); palmsOnSurface(); taskStep(dt); }
   }
   SNAP = buildSnap();
 }

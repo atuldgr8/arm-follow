@@ -25,7 +25,7 @@ function calSlots() {
 // press once to start measuring, walk to every edge, press again to finish.
 // Each laptop measures its own floor (P2 measures P2's).
 function calibrate() {
-  if (!CAL.active) { CAL.active = true; CAL.live = null; CAL.samples = []; CAL.skipped = false; logEvent('calibrate', { what: 'start' }); updatePanel(); return; }
+  if (!CAL.active) { CAL.active = true; CAL.live = null; CAL.samples = []; CAL.pic = []; CAL.skipped = false; logEvent('calibrate', { what: 'start' }); updatePanel(); return; }
   CAL.active = false;
   let r = CAL.live;
   if (!r || rectW(r) < 0.5 || rectD(r) < 0.5) { toast('Too small (under 50 cm in one direction): floor not changed'); updatePanel(); return; }
@@ -70,6 +70,9 @@ function calTick() {
     CAL.live = r ? { x0: Math.min(r.x0, x), x1: Math.max(r.x1, x), z0: Math.min(r.z0, z), z1: Math.max(r.z1, z) } : { x0: x, x1: x, z0: z, z1: z };
     let dd = p.distT || p.dist;
     if (p.ankY && dd && CAL.samples.length < 3000) CAL.samples.push([1 / dd, p.ankY]);
+    // where your feet have been in the picture, for the trapezium drawn live in the camera view
+    let lm = p.lmS || p.lm;
+    if (lm && lm[27] && lm[28] && CAL.pic && CAL.pic.length < 3000) CAL.pic.push([(lm[27].x + lm[28].x) / 2, Math.max(lm[27].y, lm[28].y)]);
   }
 }
 // a straight-line fit: feet height in the picture = a + b / distance
