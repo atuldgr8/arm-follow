@@ -219,6 +219,7 @@ function bubbleHint(now) {
   let on = T => ['L', 'R'].filter(s => now - T[s] < 200).length;
   if (best.kind === 'low') return on(best.tF) === 1 ? 'one foot on · now the other foot' : 'stand on it · both feet';
   if (on(best.tH) === 1) return 'one hand on · now the other hand';
+  if (['L', 'R'].some(s => ARMS[s].owner === 2 && ARMS[s].state !== 'attached')) return 'the arm is lifeless · it can’t pop';
   if (best.kind === 'high') return best.ns ? 'too high for one · jump together' : 'jump · both hands up';
   return 'both hands on it';
 }
@@ -460,7 +461,8 @@ function bubbleHud(S) {
   let B = S && S.ok && S.bub ? S.bub : null, play = typeof RUN === 'undefined' || RUN.phase === 'play';
   let tEl = $('timer'), big = $('bigmsg'), feet = $('feet');
   if (!B) { tEl.style.display = 'none'; big.style.display = 'none'; feet.style.display = 'none'; return; }
-  $('hud').style.display = 'none'; $('hold').style.opacity = 0;
+  // the drift meter stays when the follow rule is on (as in carrying the cube)
+  $('hud').style.display = SET.bubFollow && S.hud && S.hud.anyP2 && S.hud.p1 && play ? 'block' : 'none'; $('hold').style.opacity = 0;
   $('score').textContent = 'BUBBLES ' + B.left + ' / ' + B.tot;
   tEl.style.display = play ? 'block' : 'none'; tEl.textContent = fmtT(B.tl); tEl.classList.toggle('low', B.ph === 'play' && B.tl < 10);
   let msg = null;
@@ -472,8 +474,9 @@ function bubbleHud(S) {
   }
   big.style.display = msg ? 'flex' : 'none';
   if (msg) { $('big-a').textContent = msg[0]; $('big-b').textContent = msg[1]; $('big-b').style.display = msg[1] ? '' : 'none'; }
-  let pr = play && B.ph === 'play' ? B.hint : '';
-  $('prompt').textContent = pr; $('prompt').style.opacity = pr ? 1 : 0; $('prompt').classList.remove('held', 'apart');
+  let apart = SET.bubFollow && S.hud && S.hud.state === 'apart';
+  let pr = play && B.ph === 'play' ? (apart ? 'P2: walk your shadow under the body' : B.hint) : '';
+  $('prompt').textContent = pr; $('prompt').style.opacity = pr ? 1 : 0; $('prompt').classList.remove('held'); $('prompt').classList.toggle('apart', apart);
   let ft = feetText(); feet.style.display = ft ? 'block' : 'none'; feet.textContent = ft;
 }
 // in the camera view (drawn in the picture's own, possibly mirrored, space): the ankles (green seen,

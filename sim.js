@@ -170,7 +170,7 @@ function followStep() {
   FOLLOW.dvec = { x: dx, z: dz };
   FOLLOW.drift = Math.hypot(dx, dz);
   FOLLOW.turn = Math.abs(wrap180((a.yaw - FOLLOW.yaw1) - (b.yaw - FOLLOW.yaw2)));
-  if (SET.armsOnly || isBubbles()) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
+  if (SET.armsOnly || (isBubbles() && !SET.bubFollow)) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
   if (!mine.length) { FOLLOW.state = 'together'; return; }
   let over = FOLLOW.drift > SET.tol || FOLLOW.turn > SET.turnTol;
   let under = FOLLOW.drift < 0.6 * SET.tol && FOLLOW.turn < 0.6 * SET.turnTol;

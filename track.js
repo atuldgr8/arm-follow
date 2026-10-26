@@ -24,6 +24,7 @@ const SET = {
   drift: false,          // bubbles drift slowly
   jumpThr: 0.07,         // a hop counts once hips and shoulders rise this far together (m)
   sound: true,           // pops, landings and the timer, on this laptop
+  bubFollow: true,       // Bubble Pop: the follow rule as in carrying the cube (walk apart and P2's arm falls off; a lifeless hand can't pop)
   // ---- tracking ----
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)

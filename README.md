@@ -7,7 +7,10 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.21.2 (26 Oct): place the smaller room yourself
+## v1.22 (26 Oct): Bubble Pop keeps the follow rule
+
+- **Follow rule in Bubble Pop** (Game section, on by default): as in carrying the cube, walk apart and P2's arm is left behind; a lifeless hand can't pop anything, so you have to catch up to clap. The drift meter, P2's shadow, the thread and the puppet fall all work as before (set in Follow rule and Lifeless arm). Off: the v1.19 behaviour, hands only.
+: place the smaller room yourself
 
 - **Drag the patch:** in the bigger room's camera view, grab the bold **PLAY HERE** patch and drag it anywhere on your floor. It's saved with your floor and sent to the other laptop with it; restarting is automatic if you're mid-game. P2 can move theirs too.
 - **The default spot** is now centred left to right and halfway between the middle of the floor and its back (it used to sit against the back edge, too far away in a deep room).

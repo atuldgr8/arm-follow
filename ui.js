@@ -375,7 +375,7 @@ function setupPanel() {
   // Bubble Pop (bubbles.js)
   sel('game', 'game', () => { LEGS.init = false; if (!isGuest()) restartWorld(); });
   sel('legp2', 'legP2', () => { LEGS.init = false; });
-  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; }); tog('btn-boost', 'jumpBoost'); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
+  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
   tog('btn-sound', 'sound', () => { if (SET.sound) snd(); });
   sl('bubn', 'bubbleN', v => Math.round(v) + ' bubbles'); sl('bubt', 'roundS', v => v + ' s'); sl('jthr', 'jumpThr', v => Math.round(v * 100) + ' cm');
   $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
@@ -409,7 +409,7 @@ function updatePanel() {
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   // Bubble Pop
-  set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
+  set('btn-bubfollow', 'Follow rule (the arm falls off if you walk apart): ', SET.bubFollow); set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
   set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-sound', 'Sound on this laptop: ', SET.sound);
   cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-shonly', SET.legSplit && SET.jumpBoost);
   $('game').value = SET.game; $('legp2').value = SET.legP2;
