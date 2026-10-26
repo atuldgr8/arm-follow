@@ -33,6 +33,8 @@ function calibrate() {
   // where the floor is in the camera picture (feet height in the picture against distance), for the camera view's floor outline
   let fit = fitFloor(CAL.samples); if (fit) { CAL.rect.fa = fit.a; CAL.rect.fb = fit.b; }
   try { localStorage.setItem('armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
+  CAL.walked = CAL.rect; SET.floorFrom = 'walked';   // walking it switches back to the walked floor (floordraw.js keeps the drawn one)
+  try { localStorage.setItem('armfollow.floorFrom', 'walked'); } catch (e) {}
   logEvent('calibrate', { w: +rectW(r).toFixed(2), d: +rectD(r).toFixed(2) });
   toast('Floor: ' + rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m');
   if (!isGuest() && RUN.phase === 'play') restartWorld();
@@ -42,7 +44,9 @@ function calibrate() {
 function skipFloor() { CAL.active = false; CAL.skipped = true; updatePanel(); }
 function forgetFloor() {
   CAL.rect = null; CAL.active = false; CAL.skipped = false;
-  try { localStorage.removeItem('armfollow.floor'); } catch (e) {}
+  // forgets the floor in use (walked or drawn)
+  if (SET.floorFrom === 'drawn') { CAL.drawn = null; try { localStorage.removeItem('armfollow.floorDrawn'); } catch (e) {} }
+  else { CAL.walked = null; try { localStorage.removeItem('armfollow.floor'); } catch (e) {} }
   if (!isGuest() && RUN.phase === 'play') restartWorld();
   updatePanel();
 }

@@ -7,6 +7,16 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.20 (26 Oct): draw the floor on the camera
+
+A second way to measure the floor, next to walking to its edges. **Draw it** (getting-ready card, step 1) or **Draw the floor on the camera** (Floor section) opens a big camera picture: click the four corners of your play area on the floor (tape makes it easy), drag any corner to fix it, **Use this floor** (Enter; Esc cancels).
+
+- **No tape measure needed:** stand in the picture with your feet in view while you draw. From how far away you already look (your body's size and shape) and where your ankles are in the picture, it works out how high the camera is, and from that how big the drawn area really is. Each edge shows its guessed length; the line below says the camera's height. Nobody in view: it guesses the camera is 1 m up and says it's rough.
+- **Measured it?** Type the real size (across, front to back, or just one) and that wins.
+- **What it sets:** the same floor the walked one does (play area, walk gain, where cubes and bubbles go, edge warnings), plus where the floor sits in the picture, so your feet say where you stand (as with a walked floor that was walked toward and away from the camera). The camera view outlines the area exactly where you clicked it.
+- **Compare:** Floor → **The floor comes from**: walking to its edges / drawn on the camera. Both are kept, so you can switch back and forth. Each laptop draws its own; P2 can too.
+- **Tested here** on a made-up scene (camera 0.8 m up, a 2 × 1.9 m area 2.6–4.5 m away, a person 3.5 m out): it got the camera's height, the area's size and place, and someone's distance from their feet exactly. **Depends on** the webcam field of view being about right (65° by default; the C920 is about 70° across), since the size guess is worked out from it. If the guessed size looks off and you know the real one, type it in.
+
 ## v1.19.1 (26 Oct): quick bar renamed
 - **PiP** (J): the camera picture with the skeletons (was "Camera"). **Camera** (V): behind / first person / orbit (was "View"), the current one shown under it.
 - Bubble Pop has no shortcut or quick button any more: choose it under **Game**.
@@ -176,6 +186,7 @@ Found by replaying Atul's log of 24 Oct, frame by frame:
 - `sim.js`: the rules: the body, the follow rule, the arm's puppet states, the grips and the cube task.
 - `scene.js`: draws it all in 3D: the room, the mannequin, hands with fingers, the strings, the three views.
 - `floor.js`: measuring your real floor, and fitting the room to it.
+- `floordraw.js`: drawing the floor's corners on the camera picture instead (its size guessed from the person in view).
 - `net.js`: the 2-spaces link.
 - `bubbles.js`: Bubble Pop: the bubbles, jumping, the hurdle walk, its demo, drawing, sound and HUD.
 - `ui.js`: HUD, panel, keys, the camera + skeletons view, the log, and the main loop.

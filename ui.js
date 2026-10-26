@@ -120,7 +120,10 @@ function pipStep() {
     }
     // the floor this laptop uses (or the one being measured), outlined on the picture; the centre during the walk to it
     let my = isGuest() ? 2 : 1, fr = CAL.active ? Object.assign({}, CAL.live || {}, { fa: (CAL.rect || {}).fa, fb: (CAL.rect || {}).fb }) : usable(my);
-    if (fr && fr.x0 !== undefined && !phoneOn()) {
+    if (!CAL.active && fr && fr === CAL.rect && fr.quad && !phoneOn()) {
+      x.strokeStyle = 'rgba(255,176,32,0.95)'; x.lineWidth = 2; x.setLineDash([2, 5]); x.lineCap = 'round'; x.beginPath();
+      fr.quad.forEach((q, i) => i ? x.lineTo(q[0] * w, q[1] * h) : x.moveTo(q[0] * w, q[1] * h)); x.closePath(); x.stroke(); x.setLineDash([]);
+    } else if (fr && fr.x0 !== undefined && !phoneOn()) {
       let base = CAL.rect || {}, src = { fa: fr.fa !== undefined ? fr.fa : base.fa, fb: fr.fb !== undefined ? fr.fb : base.fb };
       let pts = [[fr.x0, fr.z0], [fr.x1, fr.z0], [fr.x1, fr.z1], [fr.x0, fr.z1]].map(([px, pz]) => floorToPicture(src, px, pz));
       if (pts.every(q => q)) {
@@ -317,6 +320,8 @@ function setupPanel() {
   sl('examd', 'examineDist', v => v.toFixed(1) + ' m'); tog('btn-xray', 'xray');
   $('btn-cal').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
   $('f-cal').onclick = calibrate; $('f-skip').onclick = skipFloor; $('f-again').onclick = calibrate;
+  // drawing the floor on the camera (floordraw.js)
+  $('f-draw').onclick = fdOpen; $('btn-draw').onclick = fdOpen; $('floorfrom').onchange = e => useFloorFrom(e.target.value); fdSetup();
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
   $('f-start').onclick = startRun; $('btn-setup').onclick = backToSetup;
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
@@ -366,7 +371,8 @@ function updatePanel() {
   $('game').value = SET.game; $('legp2').value = SET.legP2;
   for (let [id, key, f] of [['bubn', 'bubbleN', v => Math.round(v) + ' bubbles'], ['bubt', 'roundS', v => v + ' s'], ['jthr', 'jumpThr', v => Math.round(v * 100) + ' cm']]) { $(id).value = SET[key]; $('val-' + id).textContent = f(SET[key]); }
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
-  $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
+  $('floorfrom').value = SET.floorFrom;
+  $('cal-status').textContent = 'This laptop: ' + fmt(CAL.rect) + (CAL.rect ? (CAL.rect.drawn ? ' (drawn' + (CAL.rect.real ? ', measured' : ', guessed') + ')' : ' (walked)') : '') + (SET.spaces === 2 && NET.connected ? ' · other laptop: ' + fmt(CAL.other) : '') +
     (CAL.rect && SET.calUse !== 'cubes' ? ' · walk gain ' + effGain().toFixed(1) : '');
   $('btn-cal3').textContent = CAL.active ? 'Done measuring' : 'Calibrate floor';
   $('spawnlr').value = SET.spawnLR ? '1' : '0';
@@ -387,7 +393,7 @@ function updatePanel() {
   $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
- let lock = isGuest(), p2own = ['btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear'];
+ let lock = isGuest(), p2own = ['btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear', 'btn-draw', 'floorfrom', 'f-draw'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
@@ -446,13 +452,14 @@ function flowStep() {
   let done1 = calStepDone(), t1;
   if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>raise both hands above your head for a second</b>, or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
     + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
-  else if (CAL.rect) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor: <b>' + fmt(CAL.rect) + '</b>';
+  else if (CAL.rect) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
   else if (CAL.skipped) t1 = '✓ Skipped: the walk-gain sliders are used instead.';
   else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then raise both hands above your head (or press Done). Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
   $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
   $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';
   $('f-skip').style.display = !CAL.active && !done1 ? '' : 'none';
+  $('f-draw').style.display = !CAL.active ? '' : 'none';
   $('f-again').style.display = !CAL.active && done1 ? '' : 'none';
   $('fs1').classList.toggle('done', done1);
   let other = '';
@@ -502,6 +509,7 @@ function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(orde
 // ---------------- keys ----------------
 window.addEventListener('keydown', e => {
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (FD.on) return;   // drawing the floor: its own keys (Esc, Enter)
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
@@ -534,7 +542,7 @@ function frame(now) {
   if (isGuest()) S = guestSnap(dt);
   else { simStep(dt, now); S = SNAP; }
   sceneRender(S, dt);
-  centreStep(dt); hudStep(S); statsStep(S); pipStep(); flowStep(); logTick(now, S);
+  centreStep(dt); hudStep(S); statsStep(S); pipStep(); flowStep(); fdTick(); logTick(now, S);
 }
 sceneInit($('stage'));
 try { let t = localStorage.getItem('armfollow.tracker'), a = localStorage.getItem('armfollow.phoneIP'); if (t) SET.tracker = t; if (a) SET.phoneIP = a; } catch (e) {}

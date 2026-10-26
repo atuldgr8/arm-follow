@@ -95,7 +95,8 @@ const SET = {
   // ---- floor (calibration, floor.js) ----
   calUse: 'both',        // the measured floor sets: 'both' | 'gain' (walk gain only) | 'cubes' (where cubes appear only)
   roomFit: 'mapped',     // 2 spaces, rooms of different sizes: 'mapped' (each maps onto the other) | 'smaller' (both use the smaller)
-  edgeWarn: true, edgeDist: 0.3
+  edgeWarn: true, edgeDist: 0.3,
+  floorFrom: 'walked'    // the floor comes from: 'walked' (walking to its edges) | 'drawn' (its corners clicked on the camera picture, floordraw.js)
 };
 
 // ---------------- small vector helpers (plain objects) ----------------

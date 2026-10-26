@@ -70,7 +70,7 @@ function unpackPerson(m) {
 }
 // P1's laptop decides the experience; these stay per laptop because they only make sense locally
 // (P2 also keeps what depends on its own camera: which camera, its field of view, and mirroring)
-const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror', 'sound'];
+const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror', 'sound', 'floorFrom'];
 const NET_TRACKING = ['source', 'hands', 'mpModel'];   // changing these restarts P2's webcam
 
 function netOn(m) {
