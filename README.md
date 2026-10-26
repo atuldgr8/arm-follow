@@ -7,7 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.22 (26 Oct): Bubble Pop keeps the follow rule
+## v1.23 (26 Oct): the split body falls; every split
+
+- **Split** (Who owns what): quick picks for who drives which limb: P2's right arm, left arm or both arms; P2's right half or left half (arm + leg); or criss-cross (P2's right arm + left leg, or left arm + right leg). Custom still sets arm by arm. The leg settings moved here from the Game section, and **split legs now work in carrying the cube too** (the hurdle walk: the body walks only when both step the same way). Jumping is still Bubble Pop's.
+- **The split body falls:** with the legs split, walking apart past the drift tolerance brings the **whole body** down, not just the arm. **Walk apart and the body**: collapses on the spot (knees give, it sinks and slumps forward), tips over P2's side, or stays up (only the arm falls). Down, it can't walk, hold or pop. **Both of you raise both hands above your heads** for a moment and it stands up again, with the drift starting from zero. Demo people and the computer partner get up by themselves after 3 s. The label and prompt say what to do. The log records each fall and how long it stayed down.
+: Bubble Pop keeps the follow rule
 
 - **Follow rule in Bubble Pop** (Game section, on by default): as in carrying the cube, walk apart and P2's arm is left behind; a lifeless hand can't pop anything, so you have to catch up to clap. The drift meter, P2's shadow, the thread and the puppet fall all work as before (set in Follow rule and Lifeless arm). Off: the v1.19 behaviour, hands only.
 : place the smaller room yourself

@@ -26,7 +26,7 @@ const JUMP_H = 0.35, HOP_H = 0.18;   // the body's jump (virtual metres); a shar
 
 const isBubbles = () => SET.game === 'bubbles' && !SET.armsOnly;
 // who owns each leg: P1, unless the legs are split (then P2 gets SET.legP2)
-function legOwner(s) { return isBubbles() && SET.legSplit ? (s === SET.legP2 ? 2 : 1) : 1; }
+function legOwner(s) { return SET.legSplit && !SET.armsOnly ? (s === SET.legP2 ? 2 : 1) : 1; }
 // the delay between the two laptops (ms): half the round trip, plus how often updates are sent
 function linkDelay() { return SET.spaces === 2 && NET.connected ? (NET.rtt || 0) / 2 + NET_EVERY : 0; }
 // THE SAME-MOMENT WINDOW (s): 0.3, and always at least the link's delay plus a margin, so a slow
@@ -183,6 +183,7 @@ function bubbleDrift(dt) {
 function inBubble(p, b) { let R = b.r + SET.touch, dx = p.x - b.c.x, dy = p.y - b.c.y, dz = (p.z - b.c.z) / 1.8; return dx * dx + dy * dy + dz * dz <= R * R; }
 function inColumn(p, b) { let R = b.r + SET.touch, dx = p.x - b.c.x, dz = (p.z - b.c.z) / 1.6; return dx * dx + dz * dz <= R * R && p.y < b.r * 2 + 0.15; }
 function bubbleTouches(now) {
+  if (BODY.fallen) return;   // a fallen body can't pop anything
   let w = BUB.w * 1000, palms = {}, feet = {};
   for (let s of ['L', 'R']) {
     let arm = ARMS[s]; if (arm.state === 'attached' || arm.state === 'snapping') palms[s] = palmOf(arm);
@@ -475,7 +476,7 @@ function bubbleHud(S) {
   big.style.display = msg ? 'flex' : 'none';
   if (msg) { $('big-a').textContent = msg[0]; $('big-b').textContent = msg[1]; $('big-b').style.display = msg[1] ? '' : 'none'; }
   let apart = SET.bubFollow && S.hud && S.hud.state === 'apart';
-  let pr = play && B.ph === 'play' ? (apart ? 'P2: walk your shadow under the body' : B.hint) : '';
+  let pr = play && B.ph === 'play' ? (S.hud && S.hud.fallen ? 'the body fell · both of you: raise both hands' : apart ? 'P2: walk your shadow under the body' : B.hint) : '';
   $('prompt').textContent = pr; $('prompt').style.opacity = pr ? 1 : 0; $('prompt').classList.remove('held'); $('prompt').classList.toggle('apart', apart);
   let ft = feetText(); feet.style.display = ft ? 'block' : 'none'; feet.textContent = ft;
 }

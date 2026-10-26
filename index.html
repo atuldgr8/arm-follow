@@ -219,10 +219,6 @@
           <div class="f"><label>Bubbles in a round<span class="tip" title="A quarter low (feet), a quarter high (jump), the rest in reach (hands). Takes effect from the next round.">ⓘ</span><span class="val" id="val-bubn"></span></label><input type="range" id="bubn" class="world" min="3" max="16" step="1"></div>
           <div class="f"><label>Round length<span class="val" id="val-bubt"></span></label><input type="range" id="bubt" class="world" min="20" max="180" step="10"></div>
           <button class="sw world" id="btn-bubfollow" title="As in carrying the cube: walk apart and P2’s arm is left behind (it falls off); a lifeless hand can’t pop anything. Catch up and it comes back. The Follow rule and Lifeless arm sections set how."></button>
-          <button class="sw world" id="btn-legsplit" title="P2 gets one of the body’s legs. The body only walks when both of you step the same general way (at the slower one’s speed), and a jump only goes up properly when both jump."></button>
-          <div class="cond" id="g-leg" data-why="Which leg · when the legs are split">
-          <div class="f"><label>P2 gets</label><select id="legp2" class="world"><option value="R">The right leg</option><option value="L">The left leg</option></select></div>
-          </div>
           <button class="sw world" id="btn-boost" title="Legs split: both jumping within the same moment makes the body jump twice as high. Only one jumping = a lopsided hop on that side."></button>
           <div class="cond" id="g-shonly" data-why="Shared-jump bubbles · needs the legs split and jumping together">
           <button class="sw world" id="btn-shonly" title="About half the high bubbles (gold) are too high for a single jump: only jumping together reaches them. Takes effect from the next round."></button>
@@ -311,9 +307,17 @@
         </div>
       </details>
       <details data-key="own" open style="--tint:#FF9A4D">
-        <summary><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="3"/><path d="M5 21v-2.5a7 7 0 0 1 14 0V21"/></svg></span><span class="st">Who owns what</span> <span class="tip" title="Legs and torso stay P1’s. Each person uses their own arm on the same side.">ⓘ</span></summary>
+        <summary><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="3"/><path d="M5 21v-2.5a7 7 0 0 1 14 0V21"/></svg></span><span class="st">Who owns what</span> <span class="tip" title="The torso is always P1’s. Each person uses their own limb on the same side.">ⓘ</span></summary>
         <div class="card">
+          <div class="f"><label>Split<span class="tip" title="Quick picks for who drives which limb. The settings below show (and fine-tune) what a pick set.">ⓘ</span></label><select id="split" class="world"><option value="custom">Custom (as set below)</option><option value="armR">P2: the right arm</option><option value="armL">P2: the left arm</option><option value="arms">P2: both arms</option><option value="halfR">P2: right half (arm + leg)</option><option value="halfL">P2: left half (arm + leg)</option><option value="crossA">Criss-cross: P2 right arm + left leg</option><option value="crossB">Criss-cross: P2 left arm + right leg</option></select></div>
           <div class="f"><label>P2 possesses</label><select id="own" class="world"><option value="R">The right arm</option><option value="L">The left arm</option><option value="both">Both arms</option><option value="custom">Custom, arm by arm</option></select></div>
+          <button class="sw world" id="btn-legsplit" title="P2 gets one of the body’s legs. The body only walks when both of you step the same general way (at the slower one’s speed), and a jump only goes up properly when both jump."></button>
+          <div class="cond" id="g-leg" data-why="Which leg · when the legs are split">
+          <div class="f"><label>P2 gets</label><select id="legp2" class="world"><option value="R">The right leg</option><option value="L">The left leg</option></select></div>
+          </div>
+          <div class="cond" id="g-bodyfall" data-why="When the body falls · when the legs are split">
+          <div class="f"><label>Walk apart and the body<span class="tip" title="With the legs split, walking apart past the drift tolerance (Follow rule) brings the whole body down. It stays down until both of you raise both hands above your heads for a moment.">ⓘ</span></label><select id="bodyfall" class="world"><option value="whole">Collapses on the spot</option><option value="side">Tips over P2’s side</option><option value="off">Stays up (only the arm falls)</option></select></div>
+          </div>
           <div class="cond" id="own-row" data-why="Arm by arm · Custom only">
           <div class="f"><div class="row2"><span>Left arm</span><select id="ownL" class="world"><option value="1">P1</option><option value="2">P2</option></select><span>Right arm</span><select id="ownR" class="world"><option value="1">P1</option><option value="2">P2</option></select></div></div>
           </div>
@@ -413,7 +417,7 @@
       for (const el of document.querySelectorAll('#panel [title]')) { el.dataset.tip = el.title; el.removeAttribute('title'); el.addEventListener('mouseenter', () => show(el)); el.addEventListener('mouseleave', hide); }
       document.addEventListener('click', e => { const t = e.target.closest('.tip'); if (t) { e.preventDefault(); e.stopPropagation(); show(t); } else if (cur) hide(); }, true);
       document.getElementById('panel').addEventListener('scroll', hide); }
-    const BUILD = '1.22 · 26 Oct 22:40'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
+    const BUILD = '1.23 · 26 Oct 23:15'; window.BUILD = BUILD; document.getElementById('pver').textContent = 'v' + BUILD;
     for (const f of ['track.js', 'phone.js', 'sim.js', 'floor.js', 'floordraw.js', 'scene.js', 'bubbles.js', 'net.js', 'ui.js']) {
       await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = f + '?v=' + encodeURIComponent(BUILD); s.onload = ok; s.onerror = () => fail(new Error(f + ' did not load')); document.body.appendChild(s); });
     }

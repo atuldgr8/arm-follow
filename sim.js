@@ -60,7 +60,7 @@ function composeAvatar(dt) {
   AV.unturn = (p.yaw - yawC) * Math.PI / 180;
   let j = p.j, pel = j.pelvis, rel = n => unturn(vsub(j[n], pel)), legs = {};
   // Bubble Pop, legs split: P2's leg takes its shape from P2's own leg
-  let q2 = isBubbles() && SET.legSplit ? live2() : null;
+  let q2 = SET.legSplit && !SET.armsOnly ? live2() : null;
   for (let s of ['L', 'R']) {
     let mine = !(q2 && q2 !== p && legOwner(s) === 2), lj = mine ? j : q2.j, turnIt = mine ? unturn : (v => v);
     let hip = rel('hip' + s), kn = vadd(hip, vmul(vnorm(turnIt(vsub(lj['kn' + s], lj['hip' + s]))), 0.43));
@@ -69,15 +69,17 @@ function composeAvatar(dt) {
   let pyT = 0.075 - Math.min(legs.L.an.y, legs.R.an.y);
   AV.py = AV.ok ? AV.py + (pyT - AV.py) * Math.min(1, dt * 8) : pyT;
   // Bubble Pop, legs split: the body walks only when both step the same way (the hurdle walk, bubbles.js)
-  let walk = isBubbles() && SET.legSplit ? hurdleStep(dt, p) : pel;
+  let walk = SET.legSplit && !SET.armsOnly ? hurdleStep(dt, p) : pel;
   let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(walk.x, walk.z);   // your real floor position, in the room (floor.js); arms only: stays put
   vp = reachHold(vp);
   if (SET.solid && !SET.armsOnly && !isBubbles()) vp = solidPush(vp);
+  if (BODY.fallen || BODY.k > 0.01) vp = BODY.at || vp; else BODY.at = { x: vp.x, z: vp.z };   // down: it stays where it fell
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
   AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), shL: W(rel('shL')), shR: W(rel('shR')),
     hipL: W(legs.L.hip), knL: W(legs.L.kn), anL: W(legs.L.an), hipR: W(legs.R.hip), knR: W(legs.R.kn), anR: W(legs.R.an) };
   if (isBubbles()) jumpLift(AV.j);   // Bubble Pop: the jump lifts the body (a lopsided hop, only one side)
+  bodyPose(dt);                      // a split body that fell: collapsed, or tipped over P2's side
   let F = torsoFrame(j);
   AV.frame = { X: unturn(F.X), Y: unturn(F.Y), Z: unturn(F.Z) };
   AV.yaw = yawC;
@@ -121,6 +123,52 @@ function reachHold(vp) {
   let zone = 0.4, ex = vp.x - RLOCK.at.x, ez = vp.z - RLOCK.at.z, e = Math.hypot(ex, ez);
   if (e > zone) { let k = 1 - zone / e; RLOCK.at.x += ex * k; RLOCK.at.z += ez * k; ex = vp.x - RLOCK.at.x; ez = vp.z - RLOCK.at.z; }
   return { x: RLOCK.at.x + ex * 0.25, z: RLOCK.at.z + ez * 0.25 };
+}
+
+// =====================================================================
+// THE SPLIT BODY FALLS (P2 owns a leg): walk apart past the drift tolerance and the whole body goes
+// down (SET.bodyFall: 'whole' collapses on the spot, 'side' tips over P2's side). It stays down,
+// can't walk, hold or pop, until BOTH raise both hands above their heads for a moment; then it
+// stands up and the drift starts again from zero. Demo people and the computer partner get up by
+// themselves after 3 s.
+// =====================================================================
+const BODY = { fallen: false, k: 0, target: 0, hold: 0, t: 0, at: null, kind: 'whole', side: 'R' };
+function bodyFalls() { return SET.bodyFall !== 'off' && SET.legSplit && !SET.armsOnly && !(isBubbles() && !SET.bubFollow); }
+function bodyFall(why) {
+  if (BODY.fallen) return;
+  BODY.fallen = true; BODY.target = 1; BODY.hold = 0; BODY.t = 0; BODY.kind = SET.bodyFall; BODY.side = SET.legP2;
+  if (CUBE.held) dropCube('the body fell');
+  logEvent('body fell', { why, how: SET.bodyFall });
+}
+const handsUp = p => p && p.j && p.j.wrL && p.j.wrR && p.j.head && p.j.wrL.y > p.j.head.y + 0.03 && p.j.wrR.y > p.j.head.y + 0.03;
+function bodyGetUp(a, b) {
+  let dt = AV.lastDt || 0.016, auto = SET.source !== 'mediapipe' || SET.comp !== 'off';
+  BODY.t += dt;
+  BODY.hold = (auto ? BODY.t > 3 : handsUp(a) && handsUp(b)) ? BODY.hold + dt : 0;
+  if (BODY.hold < (auto ? 0.01 : 0.8)) return false;
+  BODY.fallen = false; BODY.target = 0; BODY.hold = 0;
+  logEvent('body up', { after: +BODY.t.toFixed(1) });
+  return true;
+}
+const smoothF = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+// the fallen pose, applied to the body's joints (the arms hang from its shoulders)
+function bodyPose(dt) {
+  AV.lastDt = dt;
+  BODY.k = BODY.target > BODY.k ? Math.min(1, BODY.k + dt * 2.2) : Math.max(0, BODY.k - dt * 1.1);
+  if (BODY.k <= 0.001) return;
+  let s = BODY.kind === 'side' ? BODY.k * BODY.k : smoothF(BODY.k), j = AV.j;   // tipping speeds up as it goes, like falling
+  let piv = j.anL.clone().add(j.anR).multiplyScalar(0.5).setY(0);
+  let yaw = AV.yaw * Math.PI / 180, fwd = new V3(Math.sin(yaw), 0, -Math.cos(yaw)), right = new V3(Math.cos(yaw), 0, Math.sin(yaw));
+  if (BODY.kind === 'side') {
+    let q = new THREE.Quaternion().setFromAxisAngle(fwd, (BODY.side === 'R' ? -1 : 1) * 1.45 * s);
+    for (let k in j) { let r = j[k].clone().sub(piv).applyQuaternion(q); j[k].copy(piv).add(r); j[k].y = Math.max(0.06, j[k].y); }
+  } else {
+    // collapses on the spot: knees give, it sinks and slumps forward
+    for (let k in j) {
+      let r = j[k].clone().sub(piv), h = r.y;
+      j[k].set(piv.x + r.x, Math.max(0.06, h * (1 - 0.8 * s)), piv.z + r.z).addScaledVector(fwd, h * 0.35 * s);
+    }
+  }
 }
 
 // where an arm would be if it were attached: P1's shoulder, the driver's arm directions
@@ -171,14 +219,23 @@ function followStep() {
   FOLLOW.drift = Math.hypot(dx, dz);
   FOLLOW.turn = Math.abs(wrap180((a.yaw - FOLLOW.yaw1) - (b.yaw - FOLLOW.yaw2)));
   if (SET.armsOnly || (isBubbles() && !SET.bubFollow)) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
-  if (!mine.length) { FOLLOW.state = 'together'; return; }
+  let fallOn = bodyFalls();
+  if (!mine.length && !fallOn) { FOLLOW.state = 'together'; return; }
   let over = FOLLOW.drift > SET.tol || FOLLOW.turn > SET.turnTol;
   let under = FOLLOW.drift < 0.6 * SET.tol && FOLLOW.turn < 0.6 * SET.turnTol;
   let why = FOLLOW.drift > SET.tol ? 'walked apart' : 'turned apart';
   if (FOLLOW.state === 'together' && over) {
     FOLLOW.state = 'apart'; TASK.lost++;
     for (let s of mine) { become(ARMS[s], 'falling'); }
+    if (fallOn) bodyFall(why);
     logEvent('left behind', { why, drift: +FOLLOW.drift.toFixed(2), turn: Math.round(FOLLOW.turn) });
+  } else if (FOLLOW.state === 'apart' && fallOn && BODY.fallen) {
+    // the body is down: it only gets up when both raise both hands (catching up isn't enough)
+    if (bodyGetUp(a, b)) {
+      resetRefs(a, b); FOLLOW.state = 'returning';
+      for (let s of mine) { become(ARMS[s], 'returning'); }
+      if (!mine.length) FOLLOW.state = 'together';
+    }
   } else if (FOLLOW.state === 'apart' && under) {
     FOLLOW.state = 'returning';
     for (let s of mine) { become(ARMS[s], 'returning'); }
@@ -187,6 +244,7 @@ function followStep() {
     if (over) {
       FOLLOW.state = 'apart';
       for (let s of mine) { if (['returning', 'snapping', 'attached'].includes(ARMS[s].state)) become(ARMS[s], 'falling'); }
+      if (fallOn) bodyFall(why);
       logEvent('left behind again', { why });
     } else if (mine.every(s => ARMS[s].state === 'attached')) {
       FOLLOW.state = 'together'; resetRefs(a, b); logEvent('arm back', {});
@@ -477,6 +535,7 @@ const rotY = (v, a) => new V3(v.x * Math.cos(a) + v.z * Math.sin(a), v.y, -v.x *
 function palmOf(arm) { return arm.pts[2].clone().addScaledVector(arm.f, 0.045).addScaledVector(arm.n, 0.0125); }
 function gripHands() {
   let out = [];
+  if (BODY.fallen) return out;   // a fallen body can't hold anything
   for (let s of ['L', 'R']) {
     let arm = ARMS[s];
     if (arm.state !== 'attached') continue;                              // lifeless: powerless
@@ -689,6 +748,7 @@ function restartWorld() {
   AV.ok = false;
   spawnCube(true);
   bubblesReset();
+  BODY.fallen = false; BODY.k = 0; BODY.target = 0; BODY.hold = 0;
   logEvent('restart', {});
 }
 // when who-owns-what changes, every arm starts attached again
@@ -735,11 +795,11 @@ function buildSnap() {
 }
 function hudSnap() {
   return { drift: r3(FOLLOW.drift), tol: SET.tol, turn: Math.round(FOLLOW.turn), turnTol: SET.turnTol, state: FOLLOW.state,
-    score: TASK.score, hold: r3(TASK.holdT / SET.holdTime), flash: r3(TASK.flash), p1: !!live(1), p2: !!live2(), anyP2: p2Arms().length > 0,
+    score: TASK.score, hold: r3(TASK.holdT / SET.holdTime), flash: r3(TASK.flash), p1: !!live(1), p2: !!live2(), anyP2: p2Arms().length > 0 || legOwner('L') === 2 || legOwner('R') === 2,
     held: CUBE.held, slip: r3(CUBE.slip), touching: CUBE.touching || 0, dwell: r3(CUBE.dwell),
     task: taskMode(), nearT: AV.ok && TARGET.on ? r3(Math.hypot(TARGET.p.x - AV.root.x, TARGET.p.z - AV.root.z)) : 99,
     near: AV.ok ? r3(Math.hypot(CUBE.c.x - AV.root.x, CUBE.c.z - AV.root.z)) : 99, up: CUBE.held && AV.ok && CUBE.c.y - CH * CUBE.scale > AV.j.pelvis.y,
-    lifeless: p2Arms().some(s => ARMS[s].state !== 'attached'), assist: r3(Math.max(ARMS.L.assist || 0, ARMS.R.assist || 0)) };
+    lifeless: p2Arms().some(s => ARMS[s].state !== 'attached'), fallen: BODY.fallen, upHold: r3(BODY.hold / 0.8), assist: r3(Math.max(ARMS.L.assist || 0, ARMS.R.assist || 0)) };
 }
 
 // the walk to the centre: the ring everyone walks onto (the middle of the room), and where P2 is

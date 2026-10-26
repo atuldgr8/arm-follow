@@ -21,7 +21,7 @@ function hudStep(S) {
   let f = $('m-drift').querySelector('.fill'); f.style.width = (k * 100) + '%'; f.style.background = col;
   $('m-drift').querySelector('.zone').style.background = apart ? 'rgba(18,161,80,0.25)' : 'rgba(95,224,176,0)';
   let ft = $('m-turn').querySelector('.fill'); ft.style.width = (kt * 100) + '%'; ft.style.background = h.turn > h.turnTol ? '#E5372A' : '#1A1A1A';
-  $('hud-label').textContent = apart ? 'arm left behind · catch up' : back ? 'coming back' : h.state === 'vacant' ? 'nobody in the arm' : 'together';
+  $('hud-label').textContent = h.fallen ? 'the body fell · both raise your hands' : apart ? 'arm left behind · catch up' : back ? 'coming back' : h.state === 'vacant' ? 'nobody in the arm' : 'together';
   $('hud-label').style.color = apart ? '#E5372A' : '#1A1A1A';
   $('score').textContent = 'CUBES ' + h.score; $('score').style.display = SET.armsOnly ? 'none' : '';
   if (h.score !== lastScore) { lastScore = h.score; $('score').style.transform = 'scale(1.35)'; setTimeout(() => { $('score').style.transform = ''; }, 260); }
@@ -38,7 +38,8 @@ function hudStep(S) {
   // what to do next, in a few words
   let pr = '';
   if (RUN.phase === 'play' && h.p1 && !SET.armsOnly) {
-    if (h.state === 'apart') pr = 'P2: walk your shadow under the body';
+    if (h.fallen) pr = 'the body fell · both of you: raise both hands' + (h.upHold > 0 ? ' ' + '●'.repeat(Math.ceil(h.upHold * 4)) : '');
+    else if (h.state === 'apart') pr = 'P2: walk your shadow under the body';
     else if (h.held && h.task === 'carry') pr = h.nearT < 1.0 ? 'HELD · set it down on the blue-marked plinth' : 'HELD · carry it to the blue-marked plinth →';
     else if (h.task === 'carry' && h.hold > 0) pr = 'placed ✓';
     else if (h.held && h.up) pr = 'HELD · keep it up';
@@ -374,8 +375,15 @@ function setupPanel() {
   $('btn-arms').onclick = toggleArms;
   // Bubble Pop (bubbles.js)
   sel('game', 'game', () => { LEGS.init = false; if (!isGuest()) restartWorld(); });
-  sel('legp2', 'legP2', () => { LEGS.init = false; });
-  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
+  sel('legp2', 'legP2', () => { LEGS.init = false; ownershipChanged(); });
+  sel('bodyfall', 'bodyFall');
+  // SPLIT: quick picks for who drives which limb (they set the arm and leg settings below)
+  $('split').onchange = e => {
+    let v = e.target.value, P = { armR: ['R', false], armL: ['L', false], arms: ['both', false], halfR: ['R', true, 'R'], halfL: ['L', true, 'L'], crossA: ['R', true, 'L'], crossB: ['L', true, 'R'] }[v];
+    if (!P) return;
+    SET.own = P[0]; SET.legSplit = P[1]; if (P[2]) SET.legP2 = P[2]; LEGS.init = false; ownershipChanged(); updatePanel();
+  };
+  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; ownershipChanged(); }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift');
   tog('btn-sound', 'sound', () => { if (SET.sound) snd(); });
   sl('bubn', 'bubbleN', v => Math.round(v) + ' bubbles'); sl('bubt', 'roundS', v => v + ' s'); sl('jthr', 'jumpThr', v => Math.round(v * 100) + ' cm');
   $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
@@ -411,7 +419,12 @@ function updatePanel() {
   // Bubble Pop
   set('btn-bubfollow', 'Follow rule (the arm falls off if you walk apart): ', SET.bubFollow); set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
   set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-sound', 'Sound on this laptop: ', SET.sound);
-  cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-shonly', SET.legSplit && SET.jumpBoost);
+  cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-bodyfall', SET.legSplit);
+  $('bodyfall').value = SET.bodyFall;
+  { let sp = 'custom', o = SET.own, L = SET.legSplit, g = SET.legP2;
+    if (!L) sp = o === 'R' ? 'armR' : o === 'L' ? 'armL' : o === 'both' ? 'arms' : 'custom';
+    else if (o === 'R') sp = g === 'R' ? 'halfR' : 'crossA'; else if (o === 'L') sp = g === 'L' ? 'halfL' : 'crossB';
+    $('split').value = sp; } cond('g-shonly', SET.legSplit && SET.jumpBoost);
   $('game').value = SET.game; $('legp2').value = SET.legP2;
   for (let [id, key, f] of [['bubn', 'bubbleN', v => Math.round(v) + ' bubbles'], ['bubt', 'roundS', v => v + ' s'], ['jthr', 'jumpThr', v => Math.round(v * 100) + ' cm']]) { $(id).value = SET[key]; $('val-' + id).textContent = f(SET[key]); }
   let fmt = r => r ? rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m' : 'not measured';
