@@ -384,7 +384,8 @@ function setupPanel() {
   setupPatchDrag();
   $('f-draw').onclick = fdOpen; $('btn-draw').onclick = fdOpen; $('floorfrom').onchange = e => useFloorFrom(e.target.value); fdSetup();
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
-  $('f-start').onclick = startRun; $('btn-setup').onclick = backToSetup;
+  $('f-start').onclick = startRun;
+  $('centre-go').onclick = () => { if (!isGuest() && RUN.phase === 'centre') { logEvent('flow', { centre: 'skipped' }); beginPlay(); } }; $('btn-setup').onclick = backToSetup;
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
@@ -399,7 +400,7 @@ function setupPanel() {
     if (!P) return;
     SET.own = P[0]; SET.legSplit = P[1]; if (P[2]) SET.legP2 = P[2]; LEGS.init = false; ownershipChanged(); updatePanel();
   };
-  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; ownershipChanged(); }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift'); tog('btn-bubxray', 'bubXray');
+  tog('btn-legsplit', 'legSplit', () => { LEGS.init = false; ownershipChanged(); }); tog('btn-boost', 'jumpBoost'); tog('btn-bubfollow', 'bubFollow', () => { if (!isGuest()) restartWorld(); }); tog('btn-shonly', 'sharedOnly'); tog('btn-drift', 'drift'); tog('btn-bubxray', 'bubXray'); tog('btn-headlook', 'headLook');
   tog('btn-sound', 'sound', () => { if (SET.sound) snd(); });
   sl('bubn', 'bubbleN', v => Math.round(v) + ' bubbles'); sl('bubt', 'roundS', v => v + ' s'); sl('jthr', 'jumpThr', v => Math.round(v * 100) + ' cm');
   $('armsview').onchange = e => { SET.armsView = e.target.value; updatePanel(); };
@@ -434,7 +435,7 @@ function updatePanel() {
   set('btn-edge', 'Edge warning: ', SET.edgeWarn); set('btn-xray', 'See-through body: ', SET.xray);
   // Bubble Pop
   set('btn-bubfollow', 'Follow rule (the arm falls off if you walk apart): ', SET.bubFollow); set('btn-legsplit', 'Split the legs (P2 gets one): ', SET.legSplit); set('btn-boost', 'Jumping together = twice as high: ', SET.jumpBoost);
-  set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-bubxray', 'See-through body: ', SET.bubXray); set('btn-sound', 'Sound on this laptop: ', SET.sound);
+  set('btn-shonly', 'Some high bubbles need a jump together: ', SET.sharedOnly); set('btn-drift', 'Bubbles drift: ', SET.drift); set('btn-bubxray', 'See-through body: ', SET.bubXray); set('btn-headlook', 'First person follows your head: ', SET.headLook); set('btn-sound', 'Sound on this laptop: ', SET.sound);
   cond('g-bub', SET.game === 'bubbles'); cond('g-leg', SET.legSplit); cond('g-bodyfall', SET.legSplit);
   $('bodyfall').value = SET.bodyFall;
   { let sp = 'custom', o = SET.own, L = SET.legSplit, g = SET.legP2;
@@ -495,6 +496,9 @@ function backToSetup() {
   unlockPeople(); RUN.phase = SET.source === 'demo' ? 'play' : 'setup'; RUN.centre = null; logEvent('flow', { to: 'setup' }); updatePanel();
 }
 // host: during the walk to the centre, who's there yet
+// how close to the middle counts as "on the ring" (webcam positions are a guess: 15 cm was too strict and
+// could leave you stuck before the game began)
+const RING_OK = 0.35;
 function centreStep(dt) {
   if (RUN.phase !== 'centre' || isGuest()) return;
   let st = {};
@@ -503,7 +507,7 @@ function centreStep(dt) {
     st['d' + k] = !p ? null : (d === null || !isHuman(p)) ? 0 : r3(d);
   }
   RUN.centre = st;
-  let there = k => st['d' + k] !== null && st['d' + k] < 0.15;
+  let there = k => st['d' + k] !== null && st['d' + k] < RING_OK;
   // both on the ring for 0.8 s (real time) and it begins
   let now = performance.now();
   if (!(there(1) && there(2))) RUN.centreSince = 0; else if (!RUN.centreSince) RUN.centreSince = now;
@@ -517,7 +521,8 @@ function flowStep() {
   $('centre').style.display = showCentre ? 'block' : 'none';
   $('waiting').style.visibility = showCard ? 'hidden' : 'visible';
   if (showCentre) {
-    let c = RUN.centre || {}, f = d => d === null || d === undefined ? 'not found' : d < 0.15 ? '✓ there' : d.toFixed(2) + ' m away';
+    let c = RUN.centre || {}, f = d => d === null || d === undefined ? 'not found' : d < RING_OK ? '✓ there' : d.toFixed(2) + ' m away';
+    $('centre-go').style.display = isGuest() ? 'none' : '';
     $('centre-who').textContent = 'P1 ' + f(c.d1) + '   ·   P2 ' + f(c.d2);
   }
   if (!showCard) return;

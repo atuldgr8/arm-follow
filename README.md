@@ -7,7 +7,13 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.24 (27 Oct): Arms only in Bubble Pop, a see-through body, the floor drawn live while you walk it
+## v1.25 (27 Oct): first person follows your head; the 2-laptop start can't get stuck; the computer's arm stops dropping
+
+- **First person like a game** (View → **First person follows your head**, on): in first person, and in Arms only from your eyes, the eye sits on your head and looks wherever your head points (from your nose against your ears), smoothed so tracking wobble doesn't shake it. Off: the old fixed look down at the hands.
+- **The walk to the green ring** (2 laptops, measured floors) counts you as there within 35 cm (it was 15 cm, which webcam positions could miss for good, so the game never began), and P1 has a **Start now** button on it. Nobody's arm can fall off before the game begins.
+- **The computer partner's arm (and anyone's) no longer drops** when tracking starts over (switching camera or input, the computer partner being re-placed): a jump of more than 60 cm in one frame restarts the drift instead of leaving the arm behind.
+- **Tested** with two tabs linked like two laptops, each fed a made-up webcam person through the real tracking: host, join, skip or measured floors, START, the ring, play, P1 walking off (the arm falls), P2 catching up (it comes back), and Bubble Pop starting on both screens.
+: Arms only in Bubble Pop, a see-through body, the floor drawn live while you walk it
 
 - **Arms only in Bubble Pop:** the body stands still and every bubble is a hands one, within reach: spread across the front of the body from the waist to just overhead. Same count and clock. (Before, Arms only switched Bubble Pop off.)
 - **See-through body** (Game section, on): in Bubble Pop the body is see-through and the arms a little, so bubbles behind it show in the view from behind.

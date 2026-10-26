@@ -308,6 +308,17 @@ function drawHand(G, side, W, f, n, curl) {
 }
 
 // ---------------- views ----------------
+// WHERE THE HEAD POINTS: from the ears' midpoint to the nose (the nose sits a little below the ears, so
+// that's taken off: looking level reads level). Smoothed, so small tracking wobble doesn't shake the view.
+function headDir(b, dt) {
+  let d = b.nose ? b.nose.clone().sub(b.head) : null;
+  if (!d || d.length() < 0.03) d = new V3(Math.sin(SC.camYaw || 0), 0, -Math.cos(SC.camYaw || 0));
+  d.y += 0.035; d.normalize();
+  d.y = clamp(d.y, -0.9, 0.7);
+  if (!SC.hdir) SC.hdir = d.clone();
+  SC.hdir.lerp(d, Math.min(1, (dt || 0.016) * 7)).normalize();
+  return SC.hdir.clone();
+}
 function setView(v) {
   SET.view = v;
   SC.controls.enabled = v === 'orbit';
@@ -338,11 +349,15 @@ function cameraStep(S, dt, b) {
   // ARMS ONLY: a steady view of the arms (from the eyes, facing you like a mirror, or from the side)
   if (S.armsOnly && SET.view !== 'orbit') {
     let head = b.head.clone(), chest = b.neck.clone().add(new V3(0, -0.2, 0)), wantA, lookA, fovA = 70;
-    if (SET.armsView === 'first') { wantA = head.clone().add(new V3(0, 0.04, -0.08)); lookA = chest.clone().add(new V3(0, -0.15, -0.9)); fovA = 85; }
+    if (SET.armsView === 'first') {
+      if (SET.headLook) { let hd = headDir(b, dt); wantA = head.clone().add(new V3(0, 0.03, 0)).addScaledVector(hd, 0.08); lookA = wantA.clone().add(hd); fovA = 85; }   // a game's first person: your eyes, looking where your head points
+      else { wantA = head.clone().add(new V3(0, 0.04, -0.08)); lookA = chest.clone().add(new V3(0, -0.15, -0.9)); fovA = 85; }
+    }
     else if (SET.armsView === 'mirror') { wantA = chest.clone().add(new V3(0, 0.25, -1.9)); lookA = chest.clone(); fovA = 60; }
     else { wantA = chest.clone().add(new V3(1.9, 0.25, -0.35)); lookA = chest.clone().add(new V3(0, 0, -0.2)); fovA = 60; }
+    let fast = SET.armsView === 'first' && SET.headLook ? 12 : 4;   // the head-tracked eye follows closely
     if (!SC.armsS || SC.armsS.distanceTo(wantA) > 1.5) { SC.armsS = wantA.clone(); SC.armsL = lookA.clone(); }
-    SC.armsS.lerp(wantA, Math.min(1, dt * 4)); SC.armsL.lerp(lookA, Math.min(1, dt * 4));
+    SC.armsS.lerp(wantA, Math.min(1, dt * fast)); SC.armsL.lerp(lookA, Math.min(1, dt * fast));
     if (Math.abs(cam.fov - fovA) > 0.05) { cam.fov = fovA; cam.updateProjectionMatrix(); }
     SC.camPos.copy(SC.armsS); SC.camLook.copy(SC.armsL); SC.fp = 0; SC.exam = 0;
     cam.position.copy(SC.camPos); cam.lookAt(SC.camLook); return;
@@ -354,9 +369,10 @@ function cameraStep(S, dt, b) {
   let fov = SET.view === 'first' ? 80 : 55;
   if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
   if (SET.view === 'first') {
-    let eye = b.head.clone().addScaledVector(fwd, 0.09).add(new V3(0, 0.02, 0));
+    let hd = SET.headLook ? headDir(b, dt) : null;
+    let eye = b.head.clone().addScaledVector(hd || fwd, 0.09).add(new V3(0, 0.02, 0));
     cam.position.copy(eye);
-    cam.lookAt(eye.clone().addScaledVector(fwd, 1).add(new V3(0, -0.32, 0)));
+    cam.lookAt(hd ? eye.clone().add(hd) : eye.clone().addScaledVector(fwd, 1).add(new V3(0, -0.32, 0)));
     SC.camPos.copy(cam.position); SC.camLook.copy(eye).addScaledVector(fwd, 1);
     return;
   }

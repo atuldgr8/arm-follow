@@ -31,6 +31,7 @@ const SET = {
   source: 'mediapipe',   // 'mediapipe' (webcam) | 'demo' (two made-up people, only when you choose it)
   tracker: 'webcam',     // 'webcam' (MediaPipe) | 'iphone' (the Body Stream app: Apple body tracking, real depth)
   phoneIP: '',
+  headLook: true,        // first person (and Arms only from your eyes) looks wherever your head points
   pipDepth: true,        // iPhone ultra-wide + LiDAR: outline the depth zone and ring the measured joints in the camera view           // the address the Body Stream app shows
   mirror: true, smooth: 1.0, solo: false,   // smooth 1.0: Atul's pick after testing (25 Oct)
   reach: 'picture',      // reaching toward the camera: 'picture' (from how short the arm looks) | 'model' (the body model's own depth guess)
@@ -142,7 +143,7 @@ function handK() { return Math.min(1, 0.85 * Math.pow(0.3, SET.smooth)); }   // 
 // =====================================================================
 // PEOPLE: slot 1 = P1 (body owner), slot 2 = P2 (the arm)
 // =====================================================================
-const JN = ['pelvis', 'neck', 'head', 'shL', 'elL', 'wrL', 'inL', 'piL', 'thL', 'shR', 'elR', 'wrR', 'inR', 'piR', 'thR',
+const JN = ['pelvis', 'neck', 'head', 'nose', 'shL', 'elL', 'wrL', 'inL', 'piL', 'thL', 'shR', 'elR', 'wrR', 'inR', 'piR', 'thR',
   'hipL', 'knL', 'anL', 'hipR', 'knR', 'anR'];
 const TRK = { status: 'demo people', hz: 0, hzFrames: 0, hzStart: 0, dropouts: 0, since: performance.now() };
 const people = { 1: null, 2: null };
@@ -584,7 +585,7 @@ function buildPerson(slot, c, now, W, H, fpx, tanH, sx) {
     }
     if (!lost) { mem.rel = {}; for (let c2 of ['el', 'wr', 'in', 'pi', 'th']) { mem.rel[c2] = vsub(j[c2 + s], j['sh' + s]); } mem.t = now; }
   }
-  j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8]));
+  j.neck = vmid(j.shL, j.shR); j.head = vmid(A(wl[7]), A(wl[8])); j.nose = A(wl[0]);   // nose vs ears: which way the head points
   gestureTick(slot, lm, now);
   return { key: null, j, chir: c.chir, lm: c.lm, lmS: lm, hands: c.hands, size: c.size, img: c.img, ankY: Math.max(lm[27].y, lm[28].y), dist: dS, distT: dB, up: M.jb ? M.jb.up : 0 };
 }
@@ -699,7 +700,7 @@ function makePerson(px, pz, walkPhase, walkAmt, arms, lift) {
   j.pelvis = V(px, 0.95 + bob, pz);
   j.hipL = V(px - 0.1, 0.93 + bob, pz); j.hipR = V(px + 0.1, 0.93 + bob, pz);
   j.shL = V(px - 0.19, 1.42 + bob, pz); j.shR = V(px + 0.19, 1.42 + bob, pz);
-  j.neck = vmid(j.shL, j.shR); j.head = V(px, 1.62 + bob, pz + 0.01);
+  j.neck = vmid(j.shL, j.shR); j.head = V(px, 1.62 + bob, pz + 0.01); j.nose = V(px, 1.6 + bob, pz - 0.09);
   for (let [s, sg] of [['L', -1], ['R', 1]]) {
     let sw = Math.sin(walkPhase + (s === 'L' ? 0 : Math.PI)) * 0.22 * walkAmt;
     let hip = j['hip' + s];
@@ -841,6 +842,7 @@ let demoLast = 0;
 function setSource(src, deviceId) {
   SET.source = src;
   people[1] = null; people[2] = null; DEMO.reset = true; COMP.hist = []; COMP.x = null;
+  if (typeof FOLLOW !== 'undefined') { FOLLOW.state = 'vacant'; FOLLOW.ref1 = null; }   // tracking restarts: the arm re-attaches fresh (it used to drop)
   if (src === 'mediapipe' && SET.tracker === 'iphone') { stopMediaPipe(); startPhone('body'); }
   else if (src === 'mediapipe' && (SET.tracker === 'phonecam' || SET.tracker === 'phonedepth')) { stopPhone(); startMediaPipe(null, true); }
   else if (src === 'mediapipe') { stopPhone(); startMediaPipe(deviceId); }

@@ -76,7 +76,7 @@ function composeAvatar(dt) {
   if (BODY.fallen || BODY.k > 0.01) vp = BODY.at || vp; else BODY.at = { x: vp.x, z: vp.z };   // down: it stays where it fell
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
-  AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), shL: W(rel('shL')), shR: W(rel('shR')),
+  AV.j = { pelvis: base, neck: W(rel('neck')), head: W(rel('head')), nose: W(j.nose ? rel('nose') : vadd(rel('head'), V(0, -0.02, -0.09))), shL: W(rel('shL')), shR: W(rel('shR')),
     hipL: W(legs.L.hip), knL: W(legs.L.kn), anL: W(legs.L.an), hipR: W(legs.R.hip), knR: W(legs.R.kn), anR: W(legs.R.an) };
   if (isBubbles() && !SET.armsOnly) jumpLift(AV.j);   // Bubble Pop: the jump lifts the body (a lopsided hop, only one side)
   bodyPose(dt);                      // a split body that fell: collapsed, or tipped over P2's side
@@ -212,13 +212,18 @@ function followStep() {
     for (let s of mine) { if (ARMS[s].state !== 'attached') become(ARMS[s], 'returning'); }
     logEvent('P2 here', {});
   }
+  // a jump of more than 60 cm in one frame is tracking starting over (a new camera, the computer partner
+  // re-placed), not a step: start counting the drift again instead of dropping the arm
+  let jumped = FOLLOW.last && (Math.hypot(a.j.pelvis.x - FOLLOW.last.a.x, a.j.pelvis.z - FOLLOW.last.a.z) > 0.6 || Math.hypot(b.j.pelvis.x - FOLLOW.last.b.x, b.j.pelvis.z - FOLLOW.last.b.z) > 0.6);
+  FOLLOW.last = { a: { x: a.j.pelvis.x, z: a.j.pelvis.z }, b: { x: b.j.pelvis.x, z: b.j.pelvis.z } };
+  if (jumped) { resetRefs(a, b); logEvent('tracking jumped', { refs: 'reset' }); }
   let k2 = p2Scale();   // rooms of different sizes, mapped: P2's steps scaled into P1's room
   // stepping toward/away from the camera counts less (SET.depthDrift): leaning in to reach looks like a step
   let dx = (a.j.pelvis.x - FOLLOW.ref1.x) - (b.j.pelvis.x - FOLLOW.ref2.x) * k2.x, dz = ((a.j.pelvis.z - FOLLOW.ref1.z) - (b.j.pelvis.z - FOLLOW.ref2.z) * k2.z) * SET.depthDrift;
   FOLLOW.dvec = { x: dx, z: dz };
   FOLLOW.drift = Math.hypot(dx, dz);
   FOLLOW.turn = Math.abs(wrap180((a.yaw - FOLLOW.yaw1) - (b.yaw - FOLLOW.yaw2)));
-  if (SET.armsOnly || (isBubbles() && !SET.bubFollow)) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
+  if (SET.armsOnly || (isBubbles() && !SET.bubFollow) || (typeof RUN !== 'undefined' && RUN.phase !== 'play')) { FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 }; }   // arms only and Bubble Pop: never left behind (a fallen arm comes back)
   let fallOn = bodyFalls();
   if (!mine.length && !fallOn) { FOLLOW.state = 'together'; return; }
   let over = FOLLOW.drift > SET.tol || FOLLOW.turn > SET.turnTol;
@@ -805,5 +810,5 @@ function hudSnap() {
 function centreSnap() {
   if (typeof RUN === 'undefined' || RUN.phase !== 'centre') return null;
   let p2 = p2InRoom(), c = RUN.centre || {};
-  return { ring: [VR.cx, VR.cz], p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: c.d1 !== null && c.d1 < 0.15, ok2: c.d2 !== null && c.d2 < 0.15 };
+  return { ring: [VR.cx, VR.cz], p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: c.d1 !== null && c.d1 < RING_OK, ok2: c.d2 !== null && c.d2 < RING_OK };
 }
