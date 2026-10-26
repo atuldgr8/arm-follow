@@ -117,8 +117,9 @@ function sceneInit(container) {
   // the walk to the centre: a ring on the floor, and a marker for where P2 is
   SC.parts.ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 48), new THREE.MeshBasicMaterial({ color: 0x12a150, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   SC.parts.ring.rotation.x = -Math.PI / 2; SC.parts.ring.visible = false; scene.add(SC.parts.ring);
-  SC.parts.p2dot = new THREE.Mesh(new THREE.CircleGeometry(0.16, 32), new THREE.MeshBasicMaterial({ color: COL.p2, transparent: true, opacity: 0.9 }));
-  SC.parts.p2dot.rotation.x = -Math.PI / 2; SC.parts.p2dot.visible = false; scene.add(SC.parts.p2dot);
+  // walking to the ring: each person's shadow on the floor, P1's grey and P2's orange
+  let tint = c => { let m = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.55), new THREE.MeshBasicMaterial({ map: shTex, color: c, transparent: true, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); return m; };
+  SC.parts.p1dot = tint(0x8a8a86); SC.parts.p2dot = tint(COL.p2);
   window.addEventListener('resize', sceneResize);
   sceneResize();
 }
@@ -157,6 +158,7 @@ function sceneRender(S, dt) {
   P.torso.position.copy(b.pelvis).lerp(b.neck, 0.55); P.torso.quaternion.copy(q);
   P.torso.scale.set(clamp(sw / 0.32, 0.85, 1.3), (tl + 0.04) / 0.58, 0.72);
   P.pelvis.position.copy(b.hipL).lerp(b.hipR, 0.5).addScaledVector(Yv, 0.04); P.pelvis.quaternion.copy(q); P.pelvis.scale.set(0.16, 0.11, 0.11);
+  SC.parts.bodyMat.color.setHex(S.centre && !S.centre.ok1 ? COL.dead : COL.body);   // the torso and head: P1's
   let headC = b.head.clone().addScaledVector(Yv, 0.03);
   seg(P.neck, b.neck, headC, 0.045);
   ball(P.head, headC, 0.1); P.head.scale.set(0.092, 0.112, 0.102);
@@ -167,7 +169,8 @@ function sceneRender(S, dt) {
   let fwd = new V3(Math.sin(S.yaw * Math.PI / 180), 0, -Math.cos(S.yaw * Math.PI / 180));
   for (let s of ['L', 'R']) {
     let L = P.legs[s];
-    P.legMat[s].color.setHex(S.legs && S.legs[s] === 2 ? COL.p2 : COL.body);
+    let own = S.legs && S.legs[s] === 2 ? 2 : 1, litL = !S.centre || (own === 2 ? S.centre.ok2 : S.centre.ok1);
+    P.legMat[s].color.setHex(!litL ? COL.dead : own === 2 ? COL.p2 : COL.body);
     seg(L.thigh, b['hip' + s], b['kn' + s], 0.07); seg(L.shin, b['kn' + s], b['an' + s], 0.055); ball(L.knee, b['kn' + s], 0.06);
     L.foot.position.copy(b['an' + s]).addScaledVector(fwd, 0.06).setY(Math.max(0.035, b['an' + s].y - 0.04));
     L.foot.rotation.set(0, -S.yaw * Math.PI / 180, 0);
@@ -178,7 +181,8 @@ function sceneRender(S, dt) {
   for (let s of ['L', 'R']) {
     let A = S.arms[s], G = P.arms[s], pts = A.pts.map(fromArr);
     let alive = A.owner === 2 ? COL.p2 : COL.body;
-    G.col.set(COL.dead).lerp(new THREE.Color(alive), clamp(A.life, 0, 1));
+    let lit = !S.centre || (A.owner === 2 ? S.centre.ok2 : S.centre.ok1);   // walking to the ring: lifeless until its owner is on it
+    G.col.set(COL.dead).lerp(new THREE.Color(alive), lit ? clamp(A.life, 0, 1) : 0);
     G.m.color.copy(G.col);
     let ao = S.bub && SET.bubXray && !S.armsOnly ? 0.75 : 1;   // Bubble Pop: see-through arms (a little)
     if (G.m.opacity !== ao) { G.m.opacity = ao; G.m.transparent = ao < 1; G.m.depthWrite = ao >= 1; G.m.needsUpdate = true; }
@@ -233,11 +237,12 @@ function sceneRender(S, dt) {
 
   drawFloorEdges(S.chap);
   let ce = S.centre, P2 = SC.parts;
-  P2.ring.visible = !!ce; P2.p2dot.visible = !!(ce && ce.p2);
+  P2.ring.visible = !!ce; P2.p2dot.visible = !!(ce && ce.p2); P2.p1dot.visible = !!(ce && ce.p1);
+  if (ce && ce.p1) P2.p1dot.position.set(ce.p1[0], 0.014, ce.p1[1]);
   if (ce) {
     let pulse = 1 + 0.06 * Math.sin(performance.now() / 250);
     P2.ring.position.set(ce.ring[0], 0.01, ce.ring[1]); P2.ring.scale.setScalar(pulse);
-    P2.ring.material.color.setHex(ce.ok1 && ce.ok2 ? 0x12a150 : 0x5fe0b0);
+    P2.ring.material.color.setHex(ce.ok1 && ce.ok2 ? 0x12a150 : 0x5fe0b0); P2.p2dot.material.opacity = 0.9; P2.p1dot.material.opacity = 0.9;
     if (ce.p2) P2.p2dot.position.set(ce.p2[0], 0.015, ce.p2[1]);
   }
   // see-through body while examining: the torso, head, hips and legs fade; the arms stay solid

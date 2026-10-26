@@ -73,6 +73,7 @@ function composeAvatar(dt) {
   let vp = SET.armsOnly ? { x: START.x, z: START.z } : virtOf(walk.x, walk.z);   // your real floor position, in the room (floor.js); arms only: stays put
   vp = reachHold(vp);
   if (SET.solid && !SET.armsOnly && !isBubbles()) vp = solidPush(vp);
+  if (typeof RUN !== 'undefined' && RUN.phase === 'centre') { let R = ringPos(); vp = { x: R.x, z: R.z }; }   // waiting on the ring for both of you
   if (BODY.fallen || BODY.k > 0.01) vp = BODY.at || vp; else BODY.at = { x: vp.x, z: vp.z };   // down: it stays where it fell
   AV.root.set(clamp(vp.x, -ROOM.x + 0.4, ROOM.x - 0.4), 0, clamp(vp.z, ROOM.zBack + 0.4, ROOM.zFront - 0.4));
   let base = new V3(AV.root.x, AV.py, AV.root.z), W = r => base.clone().add(toV3(r));
@@ -206,6 +207,10 @@ function followStep() {
     for (let s of mine) { let arm = ARMS[s]; if (['attached', 'snapping', 'returning'].includes(arm.state)) become(arm, 'vacant'); }
     FOLLOW.drift = 0; FOLLOW.turn = 0; FOLLOW.dvec = { x: 0, z: 0 };
     return;
+  }
+  // walking to the ring: P2's arms hang lifeless until P2 is on it, then they're pulled up on their strings
+  if (typeof RUN !== 'undefined' && RUN.phase === 'centre') {
+    if (!onRing(2)) { for (let s of mine) { if (ARMS[s].state !== 'limp') become(ARMS[s], 'limp'); } FOLLOW.state = 'vacant'; FOLLOW.ref1 = null; return; }
   }
   if (FOLLOW.state === 'vacant' || !FOLLOW.ref1) {
     resetRefs(a, b); FOLLOW.state = 'returning';
@@ -806,9 +811,10 @@ function hudSnap() {
     lifeless: p2Arms().some(s => ARMS[s].state !== 'attached'), fallen: BODY.fallen, upHold: r3(BODY.hold / 0.8), assist: r3(Math.max(ARMS.L.assist || 0, ARMS.R.assist || 0)) };
 }
 
+const onRing = k => { let c = typeof RUN !== 'undefined' && RUN.centre; return !!c && c['d' + k] !== null && c['d' + k] !== undefined && c['d' + k] < RING_OK; };
 // the walk to the centre: the ring everyone walks onto (the middle of the room), and where P2 is
 function centreSnap() {
   if (typeof RUN === 'undefined' || RUN.phase !== 'centre') return null;
-  let p2 = p2InRoom(), c = RUN.centre || {};
-  return { ring: [VR.cx, VR.cz], p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: c.d1 !== null && c.d1 < RING_OK, ok2: c.d2 !== null && c.d2 < RING_OK };
+  let p1 = inRoom(1), p2 = inRoom(2), c = RUN.centre || {}, R = ringPos();
+  return { ring: [R.x, R.z], p1: p1 ? [r3(p1.x), r3(p1.z)] : null, p2: p2 ? [r3(p2.x), r3(p2.z)] : null, ok1: onRing(1), ok2: onRing(2) };
 }

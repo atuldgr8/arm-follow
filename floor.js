@@ -99,14 +99,23 @@ function floorToPicture(r, x, z) {
 function calStepDone() { return !CAL.active && (!!CAL.rect || CAL.skipped); }
 
 // the walk to the centre before it begins: each person's centre is the middle of the floor they use
-function centreOf(slot) { let u = usable(slot); return u ? { x: (u.x0 + u.x1) / 2, z: (u.z0 + u.z1) / 2 } : null; }
+// each person's spot to walk to before it begins: the middle of the floor they use; with no measured floor,
+// 2.8 m in front of their camera, centred (in one shared space, the two spots sit 90 cm apart)
+function centreOf(slot) {
+  let u = usable(slot), off = SET.spaces === 1 ? (slot === 1 ? -0.45 : 0.45) : 0;
+  return u ? { x: (u.x0 + u.x1) / 2 + off, z: (u.z0 + u.z1) / 2 } : { x: off, z: 2.8 };
+}
+// the green ring in the room: where the body waits, and where it starts the game
+function ringPos() { return usable(1) ? { x: VR.cx, z: VR.cz } : { x: START.x, z: START.z }; }
+// where a person stands, shown in the room (both spots land on the ring)
+function inRoom(slot) {
+  let p = slot === 2 ? live2() : live(1), c = centreOf(slot); if (!p || !c) return null;
+  let g = effGain(), k = slot === 2 ? p2Scale() : { x: 1, z: 1 }, R = ringPos();
+  return { x: R.x + g * k.x * (p.j.pelvis.x - c.x), z: R.z + g * k.z * (p.j.pelvis.z - c.z) };
+}
 function centreDist(slot) { let p = live(slot), c = centreOf(slot); return p && c ? Math.hypot(p.j.pelvis.x - c.x, p.j.pelvis.z - c.z) : null; }
 // where P2 stands, shown in the room (both centres land on the same spot in the room)
-function p2InRoom() {
-  let p = live2(), c = centreOf(2); if (!p || !c) return null;
-  let g = effGain(), k = p2Scale();
-  return { x: VR.cx + g * k.x * (p.j.pelvis.x - c.x), z: VR.cz + g * k.z * (p.j.pelvis.z - c.z) };
-}
+function p2InRoom() { return inRoom(2); }
 
 // each person's measured floor (P2's comes over the link in 2 spaces)
 function rectOf(slot) {

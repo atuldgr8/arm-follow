@@ -7,7 +7,12 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.25 (27 Oct): first person follows your head; the 2-laptop start can't get stuck; the computer's arm stops dropping
+## v1.26 (27 Oct): always walk onto the green ring first
+
+- **Every start with real people** (one laptop or two, measured floor or not) goes through the ring: after START the body waits on the green ring, **lifeless** (dark grey, P2's arm hanging), and each person's shadow shows where they are, **P1 grey, P2 orange**. Walk your shadow onto the ring: the parts you drive **light up** as you arrive (P1: torso, head and P1's limbs; P2: P2's limbs, the arm pulled up on its strings). Both on the ring for a moment and it begins. **Start now** (P1) skips it.
+- **Without a measured floor,** each person's spot is 2.8 m in front of their camera, centred; in one shared space the two spots are 90 cm apart.
+- Demo people and the computer partner still start straight away.
+: first person follows your head; the 2-laptop start can't get stuck; the computer's arm stops dropping
 
 - **First person like a game** (View → **First person follows your head**, on): in first person, and in Arms only from your eyes, the eye sits on your head and looks wherever your head points (from your nose against your ears), smoothed so tracking wobble doesn't shake it. Off: the old fixed look down at the hands.
 - **The walk to the green ring** (2 laptops, measured floors) counts you as there within 35 cm (it was 15 cm, which webcam positions could miss for good, so the game never began), and P1 has a **Start now** button on it. Nobody's arm can fall off before the game begins.

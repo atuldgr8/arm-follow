@@ -481,7 +481,8 @@ function updatePanel() {
 // play:   the experience. Setup (quick bar) goes back to the start.
 const RUN = { phase: SET.source === 'demo' ? 'play' : 'setup', centre: null, centreT: 0 };
 const isHuman = p => p && (p.key === null || (p.key === 'net' && p.human));
-function needsCentre() { return SET.spaces === 2 && !!usable(1); }
+// always walk onto the ring first (real people); the demo and the computer partner start straight away
+function needsCentre() { return SET.source === 'mediapipe' && SET.comp === 'off' && !SET.solo; }
 function startRun() {
   if (isGuest()) return;
   if (CAL.active) calibrate();
