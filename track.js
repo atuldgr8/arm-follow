@@ -93,7 +93,7 @@ const SET = {
   // ---- debug ----
   tiltFix: true,         // measure the camera's tilt (laptop lid, a camera mounted high) and stand the body upright
   bendHold: true,        // while you bend, your place on the floor holds still (bending can't move your feet)
-  gestures: true,        // raise both hands: start/finish measuring the floor, then START
+  gestures: true,        // T-pose: start, then finish, measuring the floor (walking it)
   quickHands: false,     // elbows, wrists and hands are smoothed less, so they keep up with fast moves
   hud: true, pip: true, pipRaw: false,   // pipRaw: the raw detection faintly under the smoothed skeleton   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
@@ -409,25 +409,24 @@ function filterPts(arr, store, t, scale, withZ, fz) {
       z: withZ ? f.z.filter(q.z * scale.x, t, mc, b) / scale.x : q.z, visibility: q.visibility };
   });
 }
-// RAISE BOTH HANDS (both wrists above your head, held a moment): from across the room, start or finish
-// measuring the floor, and then START. Hands have to come down again before it counts again.
+// T-POSE (arms straight out to the sides, held a second): from across the room, start measuring the floor,
+// walk it (the boundary grows live in the camera view), T-pose again to finish. Arms have to come down
+// before it counts again. (Raising both hands is now only for getting a fallen body back up.)
 const GEST = { since: 0, armed: true, k: 0, slot: 0 };
 function gestureTick(slot, lm, now) {
   if (!SET.gestures || typeof RUN === 'undefined' || !calSlots().includes(slot) || (typeof FD !== 'undefined' && FD.on)) return;
   let active = CAL.active || RUN.phase === 'setup';
   let ok = q => q && (q.visibility === undefined || q.visibility > 0.5);
-  let up = active && [15, 16].every(i => ok(lm[i]) && ok(lm[0]) && lm[i].y < lm[0].y - 0.03);
+  let up = active && !calStepDone() || CAL.active ? (active && typeof fdTpose === 'function' && fdTpose({ lmS: lm })) : false;
   if (!up) { if (GEST.slot === slot) { GEST.since = 0; GEST.k = 0; GEST.armed = true; } return; }
   GEST.slot = slot;
   if (!GEST.armed) return;
   if (!GEST.since) GEST.since = now;
-  GEST.k = clamp((now - GEST.since) / 900, 0, 1);
+  GEST.k = clamp((now - GEST.since) / 1000, 0, 1);
   if (GEST.k >= 1) { GEST.armed = false; GEST.since = 0; GEST.k = 0; gestureAction(); }
 }
 function gestureAction() {
-  if (CAL.active || (RUN.phase === 'setup' && !calStepDone())) { calibrate(); logEvent('gesture', { what: 'calibrate' }); return; }
-  let b = document.getElementById('f-start');
-  if (RUN.phase === 'setup' && b && !b.disabled && !isGuest()) { startRun(); logEvent('gesture', { what: 'start' }); }
+  if (CAL.active || (RUN.phase === 'setup' && !calStepDone())) { calibrate(); logEvent('gesture', { what: CAL.active ? 'start measuring' : 'finish measuring' }); if (typeof tone === 'function') tone(CAL.active ? 660 : 990, CAL.active ? 660 : 990, 0.18, 'triangle', 0.18); }
 }
 // the camera's tilt (radians; + = looking down), measured from people standing upright
 const CAMT = { pitch: 0, n: 0 };

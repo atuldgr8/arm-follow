@@ -29,9 +29,8 @@ function hudStep(S) {
   let et = edgeText(); $('edge').style.display = et ? 'block' : 'none'; $('edge').textContent = et;
   // the big cue, readable from across the room
   let cue = null, gest = SET.gestures && SET.source === 'mediapipe';
-  if (CAL.active) cue = ['WALK TO EVERY EDGE', (CAL.live ? rectW(CAL.live).toFixed(1) + ' × ' + rectD(CAL.live).toFixed(1) + ' m so far' : 'step into the camera') + '<br>' + (gest ? 'then raise both hands above your head' : 'then press C (or Done)')];
-  else if (RUN.phase === 'setup' && gest && !calStepDone()) cue = ['RAISE BOTH HANDS', 'above your head, to start measuring your floor'];
-  else if (RUN.phase === 'setup' && gest && !isGuest() && !$('f-start').disabled) cue = ['RAISE BOTH HANDS', 'above your head to START'];
+  if (CAL.active) cue = ['WALK TO EVERY EDGE', (CAL.live ? rectW(CAL.live).toFixed(1) + ' × ' + rectD(CAL.live).toFixed(1) + ' m so far' : 'step into the camera') + '<br>' + (gest ? 'then hold a T-pose to finish' : 'then press C (or Done)')];
+  else if (RUN.phase === 'setup' && gest && !calStepDone()) cue = ['HOLD A T-POSE', 'arms straight out, to start measuring your floor' + (CAL.rect ? '<br>(or Use saved floor)' : '')];
   $('calib').style.display = cue ? 'flex' : 'none';
   if (cue) { $('calib-big').textContent = cue[0]; $('calib-text').innerHTML = cue[1]; $('calib-g').style.width = (GEST.k * 100) + '%'; }
   $('hold').querySelector('.fill').style.width = (clamp(h.hold, 0, 1) * 100) + '%';
@@ -96,8 +95,10 @@ function pipStep() {
     : MP.video && MP.video.readyState >= 2 ? { el: MP.video, w: MP.video.videoWidth, h: MP.video.videoHeight } : null;
   let cam = !!pic;
   // 400 wide; a tall picture (phone held upright) is capped at 300 high so it never covers the screen
-  let w = 400, h = cam ? Math.round(w * pic.h / pic.w) : 260;
-  if (h > 300) { w = Math.round(300 * pic.w / pic.h); h = 300; }
+  // while measuring the floor the camera view is bigger, so the boundary growing as you walk is easy to see
+  let big = CAL.active, W0 = big ? 640 : 400, H0 = big ? 460 : 300;
+  let w = W0, h = cam ? Math.round(w * pic.h / pic.w) : 260;
+  if (h > H0) { w = Math.round(H0 * pic.w / pic.h); h = H0; }
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   let x = c.getContext('2d');
   x.clearRect(0, 0, w, h); x.fillStyle = 'rgba(0,0,0,0.7)'; x.fillRect(0, 0, w, h);
@@ -428,7 +429,7 @@ function updatePanel() {
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = 'Camera <kbd>V · ' + { behind: 'behind', first: 'first person', orbit: 'orbit' }[SET.view] + '</kbd>';
-  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'Raise both hands = next step: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
+  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'T-pose = start / finish measuring: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
@@ -530,6 +531,9 @@ function flowStep() {
   let cd = $('countdown'), cnt = RUN.phase === 'countdown' && RUN.centre && RUN.centre.cnt;
   cd.style.display = cnt ? 'flex' : 'none'; if (cnt && cd.firstChild.textContent !== String(cnt)) { cd.firstChild.textContent = String(cnt); if (typeof sndBeep === 'function') sndBeep(520, 0.12); }
   $('flow').style.display = showCard ? 'block' : 'none';
+  // measuring: the card folds away so the camera view (and the boundary growing in it) shows; it unfolds when done
+  if (CAL.active && !RUN.calFolded) { RUN.calFolded = true; RUN.wasFolded = $('flow').classList.contains('folded'); $('flow').classList.add('folded'); $('f-fold').textContent = '+'; }
+  if (!CAL.active && RUN.calFolded) { RUN.calFolded = false; if (!RUN.wasFolded) { $('flow').classList.remove('folded'); $('f-fold').textContent = '–'; } }
   $('centre').style.display = showCentre ? 'block' : 'none';
   $('waiting').style.visibility = showCard ? 'hidden' : 'visible';
   if (showCentre) {
@@ -541,11 +545,11 @@ function flowStep() {
   let guest = isGuest(), linked = SET.spaces === 2 && NET.connected, fmt = r => rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m';
   // 1 · the floor
   let done1 = calStepDone(), t1;
-  if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>raise both hands above your head for a second</b>, or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
+  if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>hold a T-pose for a second</b> (arms straight out), or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
     + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
   else if (done1) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
   else if (CAL.rect) t1 = 'A floor is saved on this laptop: it’s outlined in amber on the floor in the camera view. If it still matches your space, use it; if anything moved, measure again (Calibrate walks it; Draw it on the camera).';
-  else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then raise both hands above your head (or press Done). Only spots where the camera sees all of you count.';
+  else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then hold a T-pose (or press Done). Start with a T-pose too. Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
   $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
   $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';

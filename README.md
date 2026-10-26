@@ -7,7 +7,13 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
-## v1.27.2 (27 Oct): drawing the floor with the iPhone's body tracking (LiDAR)
+## v1.28 (27 Oct): T-pose to start and finish walking the floor
+
+- **Walking it is the main way:** hold a **T-pose** (arms straight out) for a second to start measuring, walk to every edge while the boundary grows live in the camera view, **T-pose** again to finish (a chime each time). The big cue on screen says which step you're on. Calibrate / Done still work.
+- The T-pose replaces raising both hands for this; raising both hands is now only for getting a fallen body back up. START happens by itself once both floors are in (v1.27).
+- While measuring, the getting-ready card folds away and the camera view gets bigger, so nothing hides the boundary growing (the card used to cover it).
+- **Draw it** stays on the card as the other way (click or T-pose corners on the camera picture).
+: drawing the floor with the iPhone's body tracking (LiDAR)
 
 - **Draw it** now works with **iPhone · body tracking (Apple)**: it draws on the small picture the phone sends. T-pose at each corner and the corners are placed where the LiDAR measured you standing (real metres, the most accurate floor of any input); clicked or dragged corners use the fit from walking it.
 - Walking to calibrate with that input now gets the feet for the fit too, and the camera view outlines the floor in that mode as well (it didn't before).
