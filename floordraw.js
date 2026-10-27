@@ -52,14 +52,23 @@ function fdFeet(p) {
   return v < 0.985 && v > 0.02 ? { u, v } : null;
 }
 // T-POSE: both wrists and elbows out to the sides at about shoulder height, held for a second
+// Measured in the picture's real proportions (x scaled by width/height): on a wide 16:9 HD picture the
+// arms looked too short before. Hips are optional (shoulder width stands in), visibility is looser.
 function fdTpose(p) {
   let lm = p.lmS || p.lm; if (!lm) return false;
-  if (![11, 12, 13, 14, 15, 16, 23, 24].every(i => fdVis(lm[i]))) return false;
-  let shY = (lm[11].y + lm[12].y) / 2, torso = Math.abs((lm[23].y + lm[24].y) / 2 - shY), shW = Math.abs(lm[11].x - lm[12].x);
-  if (torso < 0.03) return false;
-  let level = i => Math.abs(lm[i].y - shY) < torso * 0.35;
-  let out = (w, s) => Math.abs(lm[w].x - lm[s].x) > Math.max(shW * 0.9, torso * 0.6);
-  return level(13) && level(14) && level(15) && level(16) && out(15, 11) && out(16, 12);
+  let vis = q => q && (q.visibility === undefined || q.visibility > 0.35);
+  if (![11, 12, 13, 14, 15, 16].every(i => vis(lm[i]))) return false;
+  let pic = fdPicture(), asp = pic && pic.w && pic.h ? pic.w / pic.h : (SET.tracker === 'iphone' ? 0.75 : 16 / 9);
+  let X = i => lm[i].x * asp, Y = i => lm[i].y;
+  let shY = (Y(11) + Y(12)) / 2, shW = Math.abs(X(11) - X(12));
+  let torso = vis(lm[23]) && vis(lm[24]) ? Math.abs((Y(23) + Y(24)) / 2 - shY) : shW * 1.4;
+  let size = Math.max(torso, shW * 1.2); if (size < 0.03) return false;
+  // each arm: wrist well out from its shoulder, and roughly level (within ~35°), elbow between
+  let arm = (s, e, w) => {
+    let dx = Math.abs(X(w) - X(s)), dy = Math.abs(Y(w) - Y(s));
+    return dx > size * 0.75 && dy < dx * 0.7 && Math.abs(Y(e) - shY) < size * 0.5;
+  };
+  return arm(11, 13, 15) && arm(12, 14, 16);
 }
 
 // ---------------- from the picture to metres on the floor ----------------

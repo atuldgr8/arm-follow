@@ -88,7 +88,8 @@ const HAND_BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 
 function pipStep() {
   phoneButton();
   let c = $('pip'); c.style.display = SET.pip ? 'block' : 'none'; if (!SET.pip) return;
-  c.style.pointerEvents = patchHere() ? 'auto' : 'none';   // only when there's a patch to drag
+  c.style.zIndex = RUN.pipBig ? '9' : '';
+  c.style.pointerEvents = 'auto'; c.style.cursor = PDRAG.on || EDRAG.on ? 'grabbing' : EDRAG.hover || patchHere() ? 'grab' : 'zoom-in';
   // the picture: the webcam's, or the small one the iPhone sends
   let pic = SET.source !== 'mediapipe' ? null : phoneOn() ? (PHONE.img ? { el: PHONE.img, w: PHONE.img.naturalWidth, h: PHONE.img.naturalHeight } : null)
     : MP.fromPhone ? (PHONE.bmp ? { el: MP.video, w: MP.video.width, h: MP.video.height } : null)
@@ -96,7 +97,7 @@ function pipStep() {
   let cam = !!pic;
   // 400 wide; a tall picture (phone held upright) is capped at 300 high so it never covers the screen
   // while measuring the floor the camera view is bigger, so the boundary growing as you walk is easy to see
-  let big = CAL.active, W0 = big ? 640 : 400, H0 = big ? 460 : 300;
+  let big = CAL.active || RUN.pipBig, W0 = RUN.pipBig ? Math.min(innerWidth * 0.66, 1100) : big ? 640 : 400, H0 = RUN.pipBig ? innerHeight * 0.72 : big ? 460 : 300;
   let w = W0, h = cam ? Math.round(w * pic.h / pic.w) : 260;
   if (h > H0) { w = Math.round(H0 * pic.w / pic.h); h = H0; }
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
@@ -152,6 +153,7 @@ function pipStep() {
         x.save(); if (SET.mirror) { x.translate(w, 0); x.scale(-1, 1); } x.fillStyle = 'rgba(255,176,32,0.95)'; x.font = 'bold 11px monospace';
         x.fillText('The floor can’t be placed on this picture: measure it walking toward/away from the camera, or draw it', 8, h - 26); x.restore();
       }
+      if (RUN.pipBig) floorHandles(x, w, h, onPic);
       let c = centreOf(my), cp = c && (RUN.phase === 'centre' || RUN.phase === 'countdown') ? floorToPicture(src, c.x, c.z) : null;
       if (cp) { x.strokeStyle = 'rgba(48,209,88,0.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(cp.x * w, cp.y * h, 26, 9, 0, 0, Math.PI * 2); x.stroke(); }
     }
@@ -203,6 +205,7 @@ function pipStep() {
     x.fillStyle = '#8a95a1'; x.font = '10px monospace'; x.fillText('moved since attached', cx - 55, cy + 68);
   }
   if (cam) bubblePipFrame(x, w, h);   // Bubble Pop: green / red frame for the feet, and the clap window
+  if (cam) { x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.textAlign = 'right'; x.fillText(RUN.pipBig ? (CAL.rect && !CAL.active ? 'drag the orange dots to fix the floor · click to shrink' : 'click to shrink') : 'click to enlarge', w - 8, 14); x.textAlign = 'left'; }
   x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = '11px monospace'; x.fillText(cam ? 'CAMERA · ' + (MP.found || []).length + ' bodies · ' + (MP.handsFound || []).length + ' hands' + (MP.fromPhone && PHONE.cam && PHONE.cam.held ? ' · phone ' + PHONE.cam.held : '') + ' · J hides' : 'SKELETONS (no webcam) · J hides', 8, 14);
 }
 
@@ -218,6 +221,27 @@ function hull2(P) {
 // grab the bold PLAY HERE patch and move it anywhere on your floor. It's kept with your floor (and sent
 // to the other laptop with it), so a deep room can put it where the camera sees you best.
 const PDRAG = { on: false, from: null, pc0: null };
+// FIX THE FLOOR BY HAND (camera view enlarged): drag a corner (moves two edges) or an edge's middle (one edge)
+const EDRAG = { on: false, h: null, hover: null, down: null };
+function floorHandleList() {
+  let r = CAL.rect; if (!r || r.fa === undefined || CAL.active || !RUN.pipBig) return [];
+  let mx = (r.x0 + r.x1) / 2, mz = (r.z0 + r.z1) / 2;
+  return [['x0', 'z0', r.x0, r.z0], ['x1', 'z0', r.x1, r.z0], ['x1', 'z1', r.x1, r.z1], ['x0', 'z1', r.x0, r.z1],
+    ['x0', null, r.x0, mz], ['x1', null, r.x1, mz], [null, 'z0', mx, r.z0], [null, 'z1', mx, r.z1]]
+    .map(([ex, ez, px, pz]) => ({ ex, ez, q: floorToPicture(r, px, pz) })).filter(o => o.q);
+}
+function floorHandles(x, w, h) {
+  for (let o of floorHandleList()) {
+    let hot = EDRAG.hover === o || (EDRAG.h && EDRAG.h.ex === o.ex && EDRAG.h.ez === o.ez);
+    x.fillStyle = hot ? '#fff' : 'rgba(255,176,32,1)'; x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 2;
+    x.beginPath(); x.arc(o.q.x * w, o.q.y * h, o.ex && o.ez ? 9 : 7, 0, Math.PI * 2); x.fill(); x.stroke();
+  }
+}
+function handleAt(ev) {
+  let c = $('pip'), b = c.getBoundingClientRect(), X = (ev.clientX - b.left) / b.width, Y = (ev.clientY - b.top) / b.height, best = null, bd = 0.035;
+  for (let o of floorHandleList()) { let sx = SET.mirror ? 1 - o.q.x : o.q.x, d = Math.hypot((sx - X) * b.width / b.height, o.q.y - Y); if (d < bd) { bd = d; best = o; } }
+  return best;
+}
 function patchHere() {
   let my = isGuest() ? 2 : 1, r = CAL.rect, u = usable(my);
   return r && u && u !== r && r.fa !== undefined && !CAL.active ? { r, u } : null;
@@ -229,18 +253,39 @@ function pipFloorAt(ev) {
 function setupPatchDrag() {
   let c = $('pip');
   c.addEventListener('pointerdown', ev => {
+    EDRAG.down = { x: ev.clientX, y: ev.clientY, moved: false }; c.setPointerCapture(ev.pointerId);
+    let hd = handleAt(ev); if (hd) { EDRAG.on = true; EDRAG.h = hd; ev.preventDefault(); return; }
     let P = patchHere(), f = P && pipFloorAt(ev); if (!f) return;
     let m = 0.2; if (f.x < P.u.x0 - m || f.x > P.u.x1 + m || f.z < P.u.z0 - m || f.z > P.u.z1 + m) return;
     PDRAG.on = true; PDRAG.from = f; PDRAG.pc0 = { x: (P.u.x0 + P.u.x1) / 2, z: (P.u.z0 + P.u.z1) / 2 }; c.setPointerCapture(ev.pointerId); ev.preventDefault();
   });
   c.addEventListener('pointermove', ev => {
-    let P = patchHere(); c.style.cursor = P ? (PDRAG.on ? 'grabbing' : 'grab') : '';
+    if (EDRAG.down && Math.hypot(ev.clientX - EDRAG.down.x, ev.clientY - EDRAG.down.y) > 5) EDRAG.down.moved = true;
+    if (!EDRAG.on) EDRAG.hover = handleAt(ev);
+    if (EDRAG.on) {
+      let f = pipFloorAt(ev), r = CAL.rect; if (!f || !r) return;
+      if (r.quad) delete r.quad;   // a drawn floor now follows the edges you drag
+      const MIN = 0.6;
+      if (EDRAG.h.ex === 'x0') r.x0 = Math.min(f.x, r.x1 - MIN); if (EDRAG.h.ex === 'x1') r.x1 = Math.max(f.x, r.x0 + MIN);
+      if (EDRAG.h.ez === 'z0') r.z0 = clamp(f.z, 0.5, r.z1 - MIN); if (EDRAG.h.ez === 'z1') r.z1 = Math.max(f.z, r.z0 + MIN);
+      return;
+    }
+    let P = patchHere();
     if (!PDRAG.on || !P) return; let f = pipFloorAt(ev); if (!f) return;
     P.r.pc = { x: PDRAG.pc0.x + f.x - PDRAG.from.x, z: PDRAG.pc0.z + f.z - PDRAG.from.z };
     let u = usable(isGuest() ? 2 : 1); P.r.pc = { x: (u.x0 + u.x1) / 2, z: (u.z0 + u.z1) / 2 };   // kept inside the floor
   });
   let up = () => {
-    if (!PDRAG.on) return; PDRAG.on = false;
+    let click = EDRAG.down && !EDRAG.down.moved; EDRAG.down = null;
+    if (EDRAG.on) {
+      EDRAG.on = false; EDRAG.h = null; let r = CAL.rect;
+      try { localStorage.setItem(r.drawn ? 'armfollow.floorDrawn' : 'armfollow.floor', JSON.stringify(r)); } catch (e) {}
+      if (r.drawn) CAL.drawn = r; else CAL.walked = r;
+      logEvent('floor edited', { w: +rectW(r).toFixed(2), d: +rectD(r).toFixed(2) }); toast('Floor now ' + rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m');
+      if (!isGuest() && RUN.phase === 'play') restartWorld(); updatePanel(); return;
+    }
+    if (!PDRAG.on) { if (click) { RUN.pipBig = !RUN.pipBig; } return; }
+    PDRAG.on = false;
     try { localStorage.setItem(CAL.rect.drawn ? 'armfollow.floorDrawn' : 'armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
     logEvent('patch moved', { pc: CAL.rect.pc }); toast('The smaller room moved');
     if (!isGuest() && RUN.phase === 'play') restartWorld();
@@ -387,6 +432,7 @@ function setupPanel() {
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
   $('f-start').onclick = startRun;
   $('centre-go').onclick = () => { if (!isGuest()) goCountdown('START'); };
+  $('btn-pause').onclick = () => togglePause(); $('paused').onclick = () => togglePause();
   $('btn-hostarm').onclick = () => {
     if (isGuest()) return;
     SET.hostArm = !SET.hostArm; if (NET.role === 'host') NET.myId = SET.hostArm ? 2 : 1;
@@ -471,11 +517,11 @@ function updatePanel() {
   cond('own-row', SET.own === 'custom'); cond('g-holdt', SET.warmup); cond('g-exam', SET.examine !== 'off' || SET.fpNear);
   cond('g-fall', SET.lifeless === 'fall'); cond('g-lying', SET.lyingFollow); cond('g-rtime', SET.returnStyle === 'strings');
   $('net-status').textContent = netNiceStatus(); $('net-status').classList.toggle('ok', NET.connected);
-  $('btn-host').classList.toggle('on', NET.role === 'host'); $('btn-host').textContent = NET.role === 'host' ? 'Hosting · code ' + NET.code : 'Host on this laptop (P1)';
+  $('btn-pause').classList.toggle('on', !!RUN.paused); $('btn-host').classList.toggle('on', NET.role === 'host'); $('btn-host').textContent = NET.role === 'host' ? 'Hosting · code ' + NET.code : 'Host on this laptop (P1)';
   $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
- let lock = isGuest(), p2own = ['input', 'hands', 'mpmodel', 'reach', 'feel', 'stillz', 'btn-tilt', 'btn-bend', 'btn-qhands', 'btn-gest', 'btn-pip', 'btn-hud', 'btn-pipraw', 'btn-pipdepth', 'btn-headlook', 'btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear', 'btn-draw', 'floorfrom', 'f-draw'];
+ let lock = isGuest(), p2own = ['btn-pause', 'input', 'hands', 'mpmodel', 'reach', 'feel', 'stillz', 'btn-tilt', 'btn-bend', 'btn-qhands', 'btn-gest', 'btn-pip', 'btn-hud', 'btn-pipraw', 'btn-pipdepth', 'btn-headlook', 'btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear', 'btn-draw', 'floorfrom', 'f-draw'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
@@ -631,6 +677,12 @@ function toggleGame() {
   SET.game = SET.game === 'bubbles' ? 'carry' : 'bubbles'; LEGS.init = false;
   restartWorld(); toast(SET.game === 'bubbles' ? 'Bubble Pop' : 'Carry the cube'); updatePanel();
 }
+// PAUSE: either laptop can pause or resume; P1's laptop holds the game still (nothing moves, the round's clock stops)
+function togglePause(on) {
+  if (isGuest()) { netSend({ type: 'pause', on: !RUN.paused }); return; }
+  if (RUN.phase !== 'play') { toast('Pause works once the game is on'); return; }
+  RUN.paused = on === undefined ? !RUN.paused : on; logEvent('flow', { paused: RUN.paused }); toast(RUN.paused ? 'Paused' : 'Go!'); updatePanel();
+}
 function cycleView() { let order = ['behind', 'first', 'orbit'], v = order[(order.indexOf(SET.view) + 1) % 3]; setView(v); toast({ behind: 'Behind the body', first: 'First person', orbit: 'Free orbit (drag)' }[v]); }
 
 // ---------------- keys ----------------
@@ -643,12 +695,14 @@ window.addEventListener('keydown', e => {
   if (isGuest() && k === 'j') { SET.pip = !SET.pip; updatePanel(); e.preventDefault(); return; }
   if (isGuest() && k === 'd') { SET.hud = !SET.hud; updatePanel(); e.preventDefault(); return; }
   if (isGuest() && k === 'c') { floorMenu(); e.preventDefault(); return; }
+  if (isGuest() && k === 'p') { togglePause(); e.preventDefault(); return; }
   if (isGuest() && k !== 'h' && k !== 'f') { if ('vscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();
   else if (k === 'r') restartAll();
   else if (k === 'c') floorMenu();
+  else if (k === 'p') togglePause();
   else if (k === 's') { SET.solo = !SET.solo; toast('Solo ' + (SET.solo ? 'on: you are P1 and P2' : 'off')); }
   else if (k === 'o') saveLog();
   else if (k === 'a') toggleArms();
@@ -670,7 +724,8 @@ function frame(now) {
   netTick(now);
   let S;
   if (isGuest()) S = guestSnap(dt);
-  else { simStep(dt, now); S = SNAP; }
+  else { if (RUN.phase !== 'play') RUN.paused = false; if (!RUN.paused) simStep(dt, now); S = SNAP; }
+  $('paused').style.display = RUN.paused ? 'flex' : 'none';
   sceneRender(S, dt);
   centreStep(dt); countdownStep(); hudStep(S); statsStep(S); pipStep(); flowStep(); fdTick(); logTick(now, S);
 }

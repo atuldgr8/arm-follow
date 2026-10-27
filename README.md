@@ -7,6 +7,11 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.30 (27 Oct): enlarge the camera view and fix the floor by hand · T-pose fixed on HD webcams · Pause
+- **Click the camera view (PiP)** to enlarge it; click again to shrink. Enlarged, the floor outline gets orange dots: drag a corner (moves two edges) or an edge's middle dot (one edge). Saved with the floor and sent to the other laptop. Dots outside the picture (usually the near edge) can't be grabbed.
+- **T-pose** is now measured in the picture's real proportions. A wide 16:9 HD picture made arms look shorter than they are, so the T-pose often never counted. Hips are no longer required, and it allows about 35° of tilt.
+- **Pause** (P, or the Pause button; either laptop): the game freezes on both laptops, round clock included. P or click the screen to resume.
+
 ## v1.29 (27 Oct): one clear start flow, P2 sets their own things, host can be the arm
 1. **Host** on one laptop, **Join** on the other.
 2. **Floor, on both laptops.** Calibrate (card, quick bar C, or the Floor section) always gives the same choices: **Walk it** (T-pose, walk every edge, T-pose) or **Draw it** on the camera. Then **Confirm floor** (or hold a T-pose). Measuring no longer confirms by itself; pressing Calibrate again un-confirms and sends both laptops back here.

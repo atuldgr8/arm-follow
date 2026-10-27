@@ -82,6 +82,7 @@ function netOn(m) {
   if (m.type === 'ping') { netSend({ type: 'pong', t: m.t }); return; }
   if (m.type === 'pong') { let r = performance.now() - m.t; NET.rtt = NET.rtt ? NET.rtt * 0.7 + r * 0.3 : r; return; }
   // anything from the other laptop means we're linked, whatever the connection said
+  if (m.type === 'pause' && NET.role === 'host') { togglePause(m.on); return; }
   if (m.type === 'body' || m.type === 'snap') netConnected();
   // the link may deliver out of order: an older update than one already seen is dropped
   if ((m.type === 'body' || m.type === 'snap') && m.n !== undefined) { if (m.n <= NET.lastSeq && NET.lastSeq - m.n < 1000) return; NET.lastSeq = m.n; }
@@ -97,7 +98,7 @@ function netOn(m) {
   }
   // guest: the world arrives
   if (m.type === 'snap' && NET.role === 'guest') {
-    NET.snap = m.s; NET.snapT = now; setOther(m.rect);
+    NET.snap = m.s; NET.snapT = now; setOther(m.rect); RUN.paused = !!m.paused;
     // keep the last few, stamped with P1's clock, to play back smoothly a moment behind
     if (m.t !== undefined) {
       let off = now - m.t;   // P1's clock → this laptop's (plus the trip); the smallest seen is the truest
@@ -134,7 +135,7 @@ function netTick(now) {
   let set = {}; for (let k in SET) { if (!NET_LOCAL.includes(k)) set[k] = SET[k]; }
   let sj = JSON.stringify(set), withSet = sj !== NET.setJ || now - NET.setT > 1000;
   if (withSet) { NET.setJ = sj; NET.setT = now; }
-  netSend({ type: 'snap', n: NET.seq, t: Math.round(now), s: SNAP, set: withSet ? set : undefined, rect: CAL.rect, phase: RUN.phase, centre: RUN.centre });
+  netSend({ type: 'snap', n: NET.seq, t: Math.round(now), s: SNAP, set: withSet ? set : undefined, rect: CAL.rect, phase: RUN.phase, centre: RUN.centre, paused: !!RUN.paused });
 }
 // the guest draws the host's world a moment behind, blending between the two updates either side,
 // so it moves smoothly even when updates arrive bunched up
