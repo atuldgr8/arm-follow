@@ -30,7 +30,7 @@ function netLeave() {
   netStatus('offline');
 }
 function netHost() {
-  netLeave(); NET.role = 'host'; NET.myId = 1; NET.code = netCode(); people[2] = null;
+  netLeave(); NET.role = 'host'; NET.myId = SET.hostArm ? 2 : 1; NET.code = netCode(); people[1] = null; people[2] = null;
   if (NET.local) { NET.chan = new BroadcastChannel(NET_PREFIX + NET.code); NET.chan.onmessage = e => netOn(e.data); netStatus(netNiceStatus()); return; }
   if (typeof Peer === 'undefined') { netStatus('PeerJS did not load'); return; }
   NET.peer = new Peer(NET_PREFIX + NET.code);
@@ -51,7 +51,7 @@ function netAttach(c) {
   NET.conn = c;
   c.on('open', netConnected);
   c.on('data', d => netOn(d));
-  c.on('close', () => { NET.connected = false; if (NET.role === 'host') people[2] = null; netStatus(NET.role === 'host' ? 'P2 left · code ' + NET.code : 'Disconnected'); });
+  c.on('close', () => { NET.connected = false; if (NET.role === 'host') people[3 - NET.myId] = null; netStatus(NET.role === 'host' ? 'P2 left · code ' + NET.code : 'Disconnected'); });
 }
 function netSend(m) { try { if (NET.conn && NET.conn.open) NET.conn.send(m); else if (NET.chan) { m.from = NET.role; NET.chan.postMessage(m); } } catch (e) {} }
 
@@ -70,8 +70,10 @@ function unpackPerson(m) {
 }
 // P1's laptop decides the experience; these stay per laptop because they only make sense locally
 // (P2 also keeps what depends on its own camera: which camera, its field of view, and mirroring)
-const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'mirror', 'sound', 'floorFrom'];
-const NET_TRACKING = ['source', 'hands', 'mpModel'];   // changing these restarts P2's webcam
+// what each laptop keeps for itself (its own camera and tracking, its own view helpers), never overwritten by the host
+const NET_LOCAL = ['tracker', 'phoneIP', 'comp', 'compDelay', 'compSpeed', 'solo', 'spaces', 'mpSplit', 'fov', 'fovFrom', 'mirror', 'sound', 'floorFrom', 'headLook',
+  'source', 'hands', 'mpModel', 'reach', 'smooth', 'stillZone', 'quickHands', 'tiltFix', 'bendHold', 'gestures', 'pip', 'hud', 'pipRaw', 'pipDepth'];
+const NET_TRACKING = [];   // (P2's laptop chooses its own tracking now)
 
 function netOn(m) {
   if (!m || typeof m !== 'object' || (NET.chan && m.from === NET.role)) return;
@@ -89,7 +91,8 @@ function netOn(m) {
   // host: P2's body arrives (already smoothed on P2's laptop), with P2's floor and where P2 is in the start flow
   if (m.type === 'body' && NET.role === 'host') {
     NET.bodyT = now;
-    if (m.p) { setPerson(2, 'net', unpackPerson(m.p), now, false); people[2].human = !!m.p.human; }
+    let other = 3 - NET.myId;   // the joining laptop's person: P2, or P1 when the host is the arm
+    if (m.p) { setPerson(other, 'net', unpackPerson(m.p), now, false); people[other].human = !!m.p.human; }
     setOther(m.rect); NET.otherCal = !!m.cal; NET.otherDone = !!m.done;
   }
   // guest: the world arrives
@@ -110,6 +113,7 @@ function netOn(m) {
     for (let k in (m.set || {})) {   // settings come only now and then (when they change, and once a second)
       if (NET_LOCAL.includes(k) || SET[k] === m.set[k]) continue;
       SET[k] = m.set[k]; changed = true;
+      if (k === 'hostArm') { NET.myId = SET.hostArm ? 1 : 2; people[1] = null; people[2] = null; toast(SET.hostArm ? 'You drive the body now (P1)' : 'You are the arm (P2)'); }
       if (NET_TRACKING.includes(k)) retrack = true;
       if (k === 'view') setView(SET.view);
     }
@@ -122,11 +126,11 @@ function netTick(now) {
   if (NET.local && NET.role === 'guest' && !NET.connected && now - NET.lastSend > 1000) { NET.lastSend = now; netSend({ type: 'hello' }); }
   if (!NET.connected) return;
   if (now - NET.lastPing > 1000) { NET.lastPing = now; netSend({ type: 'ping', t: now }); }
-  if (NET.role === 'host' && people[2] && now - NET.bodyT > 4000) people[2] = null;
+  if (NET.role === 'host' && people[3 - NET.myId] && now - NET.bodyT > 4000) people[3 - NET.myId] = null;
   if (now - NET.lastSend < NET_EVERY) return;
   NET.lastSend = now;
   NET.seq++;
-  if (NET.role === 'guest') { let me = live(2); netSend({ type: 'body', n: NET.seq, p: me ? packPerson(me) : null, rect: CAL.rect, cal: CAL.active, done: calStepDone() }); return; }
+  if (NET.role === 'guest') { let me = live(NET.myId); netSend({ type: 'body', n: NET.seq, p: me ? packPerson(me) : null, rect: CAL.rect, cal: CAL.active, done: calStepDone() }); return; }
   let set = {}; for (let k in SET) { if (!NET_LOCAL.includes(k)) set[k] = SET[k]; }
   let sj = JSON.stringify(set), withSet = sj !== NET.setJ || now - NET.setT > 1000;
   if (withSet) { NET.setJ = sj; NET.setT = now; }
@@ -161,6 +165,7 @@ function guestSnap(dt) {
 }
 // P2's own possessed arm, drawn straight from P2's own tracking (no round trip), on P1's body
 function predictOwnArms(out) {
+  if (SET.hostArm) return;   // the host is the arm: this laptop drives the body, so there's no arm of its own to draw early
   let me = live(2); if (!me || !out.ok) return;
   let b = out.body, A3 = a => V(a[0], a[1], a[2]);
   let to = torsoFrame({ shL: A3(b.shL), shR: A3(b.shR), neck: A3(b.neck), pelvis: A3(b.pelvis) }), from = torsoFrame(me.j), j = me.j;

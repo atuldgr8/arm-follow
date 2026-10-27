@@ -35,7 +35,7 @@ function calibrate() {
   try { localStorage.setItem('armfollow.floor', JSON.stringify(CAL.rect)); } catch (e) {}
   CAL.walked = CAL.rect; SET.floorFrom = 'walked';   // walking it switches back to the walked floor (floordraw.js keeps the drawn one)
   try { localStorage.setItem('armfollow.floorFrom', 'walked'); } catch (e) {}
-  CAL.confirmed = true;
+  CAL.confirmed = false;   // measured: now confirm it (the card's Confirm floor, or a T-pose)
   logEvent('calibrate', { w: +rectW(r).toFixed(2), d: +rectD(r).toFixed(2) });
   toast('Floor: ' + rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m');
   if (!isGuest() && RUN.phase === 'play') restartWorld();

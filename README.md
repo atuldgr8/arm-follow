@@ -7,6 +7,14 @@ One shared body. P1 owns it and walks it. P2 possesses one of its arms (or both)
 Built from `prototypes/arm-follow-build.md` (v0.3), in three.js. Saved 22 Oct 2026, from the Arm Follow chat.
 
 
+## v1.29 (27 Oct): one clear start flow, P2 sets their own things, host can be the arm
+1. **Host** on one laptop, **Join** on the other.
+2. **Floor, on both laptops.** Calibrate (card, quick bar C, or the Floor section) always gives the same choices: **Walk it** (T-pose, walk every edge, T-pose) or **Draw it** on the camera. Then **Confirm floor** (or hold a T-pose). Measuring no longer confirms by itself; pressing Calibrate again un-confirms and sends both laptops back here.
+3. **Both confirmed → walk onto the green ring** (in two rooms the playing patch is the smaller width × the smaller depth of the two floors).
+4. **Nothing starts on its own:** P1 presses **START**, or both hold a T-pose for a second → 3-2-1 → game.
+5. **This laptop is the arm (P2)** (Spaces section, host only): the host's person becomes the arm and the joining laptop's person drives the body; the host still runs the game.
+- The joining laptop now sets its own camera, tracker, hands, model, reach, smoothing, tilt/bend fixes, gestures, PiP and HUD, first-person head look and sound; only the game settings come from the host.
+
 ## v1.28 (27 Oct): T-pose to start and finish walking the floor
 
 - **Walking it is the main way:** hold a **T-pose** (arms straight out) for a second to start measuring, walk to every edge while the boundary grows live in the camera view, **T-pose** again to finish (a chime each time). The big cue on screen says which step you're on. Calibrate / Done still work.

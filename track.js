@@ -98,7 +98,8 @@ const SET = {
   hud: true, pip: true, pipRaw: false,   // pipRaw: the raw detection faintly under the smoothed skeleton   // pip: the live camera with the skeletons on it, always on to start
   // ---- floor (calibration, floor.js) ----
   calUse: 'both',        // the measured floor sets: 'both' | 'gain' (walk gain only) | 'cubes' (where cubes appear only)
-  roomFit: 'mapped',     // 2 spaces, rooms of different sizes: 'mapped' (each maps onto the other) | 'smaller' (both use the smaller)
+  hostArm: false,        // 2 spaces: the host laptop's person is the arm (P2) and the joining laptop's drives the body
+  roomFit: 'smaller',     // 2 spaces, rooms of different sizes: 'mapped' (each maps onto the other) | 'smaller' (both use the smaller)
   edgeWarn: true, edgeDist: 0.3,
   floorFrom: 'walked'    // the floor comes from: 'walked' (walking to its edges) | 'drawn' (its corners clicked on the camera picture, floordraw.js)
 };
@@ -426,6 +427,7 @@ function gestureTick(slot, lm, now) {
   if (GEST.k >= 1) { GEST.armed = false; GEST.since = 0; GEST.k = 0; gestureAction(); }
 }
 function gestureAction() {
+  if (!CAL.active && CAL.rect && !CAL.confirmed && RUN.phase === 'setup') { skipFloor(); logEvent('gesture', { what: 'confirm floor' }); if (typeof tone === 'function') tone(1320, 1320, 0.2, 'triangle', 0.18); return; }
   if (CAL.active || (RUN.phase === 'setup' && !calStepDone())) { calibrate(); logEvent('gesture', { what: CAL.active ? 'start measuring' : 'finish measuring' }); if (typeof tone === 'function') tone(CAL.active ? 660 : 990, CAL.active ? 660 : 990, 0.18, 'triangle', 0.18); }
 }
 // the camera's tilt (radians; + = looking down), measured from people standing upright

@@ -379,14 +379,20 @@ function setupPanel() {
   sl('turnmax', 'turnMax', v => v >= 180 ? 'no limit' : '±' + v + '°');
   sel('camlock', 'camLock'); sel('examine', 'examine');
   sl('examd', 'examineDist', v => v.toFixed(1) + ' m'); tog('btn-xray', 'xray');
-  $('btn-cal').onclick = calibrate; $('btn-cal3').onclick = calibrate; $('btn-calclear').onclick = forgetFloor;
-  $('f-cal').onclick = calibrate; $('f-skip').onclick = skipFloor; $('f-again').onclick = calibrate;
+  $('btn-cal').onclick = floorMenu; $('btn-cal3').onclick = floorMenu; $('btn-calclear').onclick = forgetFloor;
+  $('f-cal').onclick = calibrate; $('f-skip').onclick = skipFloor; $('f-again').onclick = () => { CAL.confirmed = false; updatePanel(); };
   // drawing the floor on the camera (floordraw.js)
   setupPatchDrag();
   $('f-draw').onclick = fdOpen; $('btn-draw').onclick = fdOpen; $('floorfrom').onchange = e => useFloorFrom(e.target.value); fdSetup();
   $('f-mapped').onclick = () => { SET.roomFit = 'mapped'; updatePanel(); }; $('f-smaller').onclick = () => { SET.roomFit = 'smaller'; updatePanel(); };
   $('f-start').onclick = startRun;
-  $('centre-go').onclick = () => { if (!isGuest() && RUN.phase === 'centre') { logEvent('flow', { centre: 'skipped' }); RUN.phase = 'countdown'; RUN.countEnd = performance.now() + 3000; } }; $('btn-setup').onclick = backToSetup;
+  $('centre-go').onclick = () => { if (!isGuest()) goCountdown('START'); };
+  $('btn-hostarm').onclick = () => {
+    if (isGuest()) return;
+    SET.hostArm = !SET.hostArm; if (NET.role === 'host') NET.myId = SET.hostArm ? 2 : 1;
+    people[1] = null; people[2] = null; unlockPeople(); FOLLOW.state = 'vacant'; FOLLOW.ref1 = null; restartWorld();
+    toast(SET.hostArm ? 'This laptop is the arm (P2); the other laptop drives the body' : 'This laptop drives the body (P1)'); updatePanel();
+  }; $('btn-setup').onclick = backToSetup;
   $('spawnlr').value = SET.spawnLR ? '1' : '0'; $('spawnlr').onchange = e => { SET.spawnLR = e.target.value === '1'; updatePanel(); };
   sel('caluse', 'calUse', () => { if (!isGuest()) restartWorld(); }); sel('roomfit', 'roomFit');
   tog('btn-edge', 'edgeWarn'); sl('edged', 'edgeDist', v => Math.round(v * 100) + ' cm');
@@ -429,7 +435,7 @@ function updatePanel() {
   quick('btn-pip', SET.pip); quick('btn-cheat', SET.cheat); $('btn-cheat').innerHTML = (SET.cheat ? 'Cheat mode · every helper on' : 'Regular · no helpers') + ' <kbd>K</kbd>'; quick('btn-arms', SET.armsOnly); $('armsview').value = SET.armsView; cond('g-armsview', SET.armsOnly); quick('btn-hud', SET.hud); quick('btn-solo', SET.solo); quick('btn-cal', CAL.active);
   $('btn-cal').innerHTML = (CAL.active ? 'Done' : 'Calibrate') + ' <kbd>C</kbd>';
   $('btn-viewq').innerHTML = 'Camera <kbd>V · ' + { behind: 'behind', first: 'first person', orbit: 'orbit' }[SET.view] + '</kbd>';
-  set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'T-pose = start / finish measuring: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
+  set('btn-hostarm', 'This laptop is the arm (P2): ', SET.hostArm); set('btn-mirror', 'Mirror: ', SET.mirror); set('btn-pipdepth', 'Show the depth zone: ', SET.pipDepth); set('btn-pipraw', 'Raw detection under the skeleton: ', SET.pipRaw); set('btn-gest', 'T-pose = start / finish measuring: ', SET.gestures); set('btn-tilt', 'Correct the camera’s tilt: ', SET.tiltFix); set('btn-bend', 'Hold your place while bending: ', SET.bendHold); set('btn-qhands', 'Quicker hands: ', SET.quickHands);
   set('btn-puppet', 'Puppet fall: ', SET.puppetFall); set('btn-curl', 'Fingers curl: ', SET.curl); set('btn-lyingf', 'Lying arm follows: ', SET.lyingFollow); set('btn-twitch', 'Twitches: ', SET.twitch);
   set('btn-over', 'Snap overshoot: ', SET.overshoot); set('btn-strings', 'Show strings: ', SET.strings);
   set('btn-warmup', 'Warm-up first (lift one): ', SET.warmup); set('btn-thread', 'Thread from the fallen arm: ', SET.thread); set('btn-fpnear', 'First person near the cube: ', SET.fpNear); set('btn-rlock', 'Hold my place while reaching: ', SET.reachLock); set('btn-solid', 'Solid plinths: ', SET.solid); set('btn-seecube', 'See-through cube when held: ', SET.seeThroughCube);
@@ -469,7 +475,7 @@ function updatePanel() {
   $('btn-join').classList.toggle('on', NET.role === 'guest'); $('btn-join').textContent = NET.role === 'guest' ? (NET.connected ? 'Joined ✓' : 'Joining…') : 'Join as P2';
   $('holders-note').textContent = SET.holders === 'possessed' && p2Arms().length < 2 ? 'Only one arm is possessed, so the two-hand cube can’t be lifted with this setting.' : '';
   // linked as P2: P1's laptop decides the experience; P2 keeps only what its own camera needs, and leaving
- let lock = isGuest(), p2own = ['btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear', 'btn-draw', 'floorfrom', 'f-draw'];
+ let lock = isGuest(), p2own = ['input', 'hands', 'mpmodel', 'reach', 'feel', 'stillz', 'btn-tilt', 'btn-bend', 'btn-qhands', 'btn-gest', 'btn-pip', 'btn-hud', 'btn-pipraw', 'btn-pipdepth', 'btn-headlook', 'btn-sound', 'btn-leave', 'tracker', 'phoneip', 'btn-phone', 'cam', 'fov', 'btn-mirror', 'btn-cal', 'btn-cal3', 'btn-calclear', 'btn-draw', 'floorfrom', 'f-draw'];
   document.querySelectorAll('#panel select, #panel input, #panel button').forEach(el => { el.disabled = lock && !p2own.includes(el.id); });
   $('lock-all').style.display = lock ? 'block' : 'none';
 }
@@ -504,6 +510,8 @@ function backToSetup() {
 const RING_OK = 0.35;
 function centreStep(dt) {
   if (RUN.phase !== 'centre' || isGuest()) return;
+  // either laptop pressed Calibrate again: back to setting the floors
+  if (SET.source !== 'demo' && (!calStepDone() || (NET.connected && SET.spaces === 2 && !NET.otherDone))) { backToSetup(); return; }
   let st = {};
   for (let k of [1, 2]) {
     let p = k === 2 ? live2() : live(1), d = centreDist(k);
@@ -515,7 +523,26 @@ function centreStep(dt) {
   let now = performance.now();
   if (!(there(1) && there(2))) RUN.centreSince = 0; else if (!RUN.centreSince) RUN.centreSince = now;
   RUN.centreT = RUN.centreSince ? (now - RUN.centreSince) / 1000 : 0;
-  if (RUN.centreT > 0.8) { RUN.phase = 'countdown'; RUN.countEnd = now + 3000; logEvent('flow', { to: 'countdown' }); }
+  // START: P1 presses it (any time), or both hold a T-pose for a second
+  let tp = k => { let p = k === 2 ? live2() : live(1); return p && tposeJ(p); };
+  RUN.tposeSince = tp(1) && tp(2) ? (RUN.tposeSince || now) : 0;
+  st.both = there(1) && there(2); st.tp = RUN.tposeSince ? Math.min(1, (now - RUN.tposeSince) / 1000) : 0;
+  if (st.tp >= 1) goCountdown('both T-posed');
+}
+function goCountdown(why) { if (RUN.phase !== 'centre') return; RUN.phase = 'countdown'; RUN.countEnd = performance.now() + 3000; logEvent('flow', { to: 'countdown', why }); }
+// a T-pose from the 3D joints (works for the other laptop's person too): wrists out level with the shoulders
+function tposeJ(p) {
+  let j = p.j; if (!j || !j.wrL || !j.wrR || !j.shL || !j.shR) return false;
+  let ok = s => { let w = j['wr' + s], h = j['sh' + s]; return Math.abs(w.y - h.y) < 0.18 && Math.hypot(w.x - h.x, w.z - h.z) > 0.4; };
+  return ok('L') && ok('R');
+}
+// CALIBRATE (quick bar C, the Floor section): back to choosing how to set this laptop's floor
+function floorMenu() {
+  if (CAL.active) { calibrate(); return; }
+  CAL.confirmed = false;
+  if (!isGuest() && RUN.phase !== 'setup') backToSetup();
+  $('flow').classList.remove('folded'); $('f-fold').textContent = '–';
+  updatePanel();
 }
 // 3-2-1 on both screens, then the game
 function countdownStep() {
@@ -539,7 +566,7 @@ function flowStep() {
   if (showCentre) {
     let c = RUN.centre || {}, f = d => d === null || d === undefined ? 'not found' : d < RING_OK ? '✓ there' : d.toFixed(2) + ' m away';
     $('centre-go').style.display = isGuest() ? 'none' : '';
-    $('centre-who').textContent = 'P1 ' + f(c.d1) + '   ·   P2 ' + f(c.d2);
+    $('centre-who').textContent = 'P1 ' + f(c.d1) + '   ·   P2 ' + f(c.d2) + (c.both ? '\n\nBoth here ✓  P1: press START, or both hold a T-pose' + (c.tp ? ' ' + '●'.repeat(Math.ceil(c.tp * 4)) : '') : '\n\nwalk onto the ring to sync up');
   }
   if (!showCard) return;
   let guest = isGuest(), linked = SET.spaces === 2 && NET.connected, fmt = r => rectW(r).toFixed(1) + ' × ' + rectD(r).toFixed(1) + ' m';
@@ -548,14 +575,14 @@ function flowStep() {
   if (CAL.active) t1 = 'Walk to the front, back, left and right edges of the space you can use. Only spots where the camera sees all of you (head to feet) count.<br>To finish: <b>hold a T-pose for a second</b> (arms straight out), or press Done.<br><b>' + (CAL.live ? fmt(CAL.live) + ' so far' : 'Waiting to see all of you in the camera…') + '</b>'
     + (CAL.seen === false ? '<br><span style="color:#ffb347">Not counting here: part of you is out of the picture (too close, or too far to a side)</span>' : CAL.seen ? '<br><span style="color:#7fdc8f">Counting ✓ all of you is in the picture</span>' : '');
   else if (done1) t1 = '✓ Using ' + (CAL.skipped ? 'your saved' : 'this') + ' floor' + (CAL.rect.drawn ? ' (drawn)' : '') + ': <b>' + fmt(CAL.rect) + '</b>';
-  else if (CAL.rect) t1 = 'A floor is saved on this laptop: it’s outlined in amber on the floor in the camera view. If it still matches your space, use it; if anything moved, measure again (Calibrate walks it; Draw it on the camera).';
+  else if (CAL.rect) t1 = 'Floor: <b>' + fmt(CAL.rect) + '</b>, outlined in amber on the floor in the camera view. If it matches your space, <b>Confirm floor</b> (or hold a T-pose). If not: <b>Walk it</b> (T-pose, walk every edge, T-pose) or <b>Draw it</b> on the camera.';
   else t1 = 'Press Calibrate, walk to the front, back, left and right edges of the space you can use, then hold a T-pose (or press Done). Start with a T-pose too. Only spots where the camera sees all of you count.';
   $('fs1-text').innerHTML = t1;
-  $('f-cal').textContent = CAL.active ? 'Done' : 'Calibrate';
+  $('f-cal').textContent = CAL.active ? 'Done' : 'Walk it';
   $('f-cal').style.display = CAL.active || !done1 ? '' : 'none';
   $('f-skip').style.display = !CAL.active && !done1 && CAL.rect ? '' : 'none';
-  $('f-skip').textContent = 'Use saved floor' + (CAL.rect ? ' (' + fmt(CAL.rect) + (CAL.rect.drawn ? ', drawn' : '') + ')' : '');
-  $('f-draw').style.display = !CAL.active ? '' : 'none';
+  $('f-skip').textContent = 'Confirm floor' + (CAL.rect ? ' (' + fmt(CAL.rect) + (CAL.rect.drawn ? ', drawn' : '') + ')' : '');
+  $('f-draw').style.display = !CAL.active && !done1 ? '' : 'none';
   $('f-again').style.display = !CAL.active && done1 ? '' : 'none';
   $('fs1').classList.toggle('done', done1);
   let other = '';
@@ -613,12 +640,15 @@ window.addEventListener('keydown', e => {
   let el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'text') return;
   if (el && /BUTTON|INPUT|SELECT|SUMMARY/.test(el.tagName)) el.blur();
   let k = (e.key || '').toLowerCase();
-  if (isGuest() && k !== 'h' && k !== 'f') { if ('jdvscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
+  if (isGuest() && k === 'j') { SET.pip = !SET.pip; updatePanel(); e.preventDefault(); return; }
+  if (isGuest() && k === 'd') { SET.hud = !SET.hud; updatePanel(); e.preventDefault(); return; }
+  if (isGuest() && k === 'c') { floorMenu(); e.preventDefault(); return; }
+  if (isGuest() && k !== 'h' && k !== 'f') { if ('vscrok'.includes(k)) { toast('P1’s laptop decides this'); e.preventDefault(); } return; }
   if (k === 'h') { let p = $('panel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; setTimeout(sceneResize, 0); }
   else if (k === 'j') SET.pip = !SET.pip;
   else if (k === 'v') cycleView();
   else if (k === 'r') restartAll();
-  else if (k === 'c') calibrate();
+  else if (k === 'c') floorMenu();
   else if (k === 's') { SET.solo = !SET.solo; toast('Solo ' + (SET.solo ? 'on: you are P1 and P2' : 'off')); }
   else if (k === 'o') saveLog();
   else if (k === 'a') toggleArms();
